@@ -14,7 +14,7 @@ its user that no current OS does?*
 
 **Answer:**
 
-> *(your answer here)*
+> My personal AI-driven operating system that runs anywhere.
 
 ---
 
@@ -25,7 +25,7 @@ iOS? What is the defining characteristic that makes it a new category?*
 
 **Answer:**
 
-> *(your answer here)*
+> It is universal, portable, modular, and personality-driven.
 
 ---
 
@@ -36,7 +36,7 @@ works? Does AI manage scheduling, storage, security, the UI — all of it?*
 
 **Answer:**
 
-> *(your answer here)*
+> AI is part of the kernel, not an app. AURA is the system's intelligence.
 
 ---
 
@@ -48,7 +48,7 @@ entirely?*
 
 **Answer:**
 
-> *(your answer here)*
+> A portable OS that can run on any device or inside any OS.
 
 ---
 
@@ -60,7 +60,7 @@ the primary target for the first release?*
 
 **Answer:**
 
-> *(your answer here)*
+> Must run on my phone, inside my phone, on top of my phone, and on any OS.
 
 ---
 
@@ -72,7 +72,7 @@ must be open-source, must not store biometric data on-device, etc.*
 
 **Answer:**
 
-> *(your answer here)*
+> Must respect permissions, be safe, modular, and fully testable.
 
 ---
 
@@ -84,7 +84,7 @@ professional? This shapes everything from UI tone to how AURA speaks.*
 
 **Answer:**
 
-> *(your answer here)*
+> The OS has a personality layer (AURA) that knows the system and helps run it.
 
 ---
 
@@ -96,7 +96,7 @@ always ask permission? Where does AURA live in the system stack?*
 
 **Answer:**
 
-> *(your answer here)*
+> AURA is integrated into the kernel and linked throughout the system.
 
 ---
 
@@ -109,7 +109,7 @@ else?*
 
 **Answer:**
 
-> *(your answer here)*
+> Digital hardware = virtual CPU, virtual memory, virtual devices, virtual bus.
 
 ---
 
@@ -122,7 +122,21 @@ across devices?*
 
 **Answer:**
 
-> *(your answer here)*
+> Mirrored OS = the OS can run on top of another OS using a host-bridge.
+
+---
+
+## Design Principles Derived from These Answers
+
+| # | Principle | Source |
+|---|-----------|--------|
+| P-01 | AI is a **first-class kernel citizen**, not a user-space app | Q3, Q8 |
+| P-02 | The OS must be **universally portable** — phone, any device, inside any OS | Q1, Q4, Q5 |
+| P-03 | **AURA** is the personality, intelligence, and runtime thread of the OS | Q7, Q8 |
+| P-04 | All "hardware" is **virtual by default** (vCPU, vMemory, vDevices, vBus) | Q9 |
+| P-05 | The OS runs **on top of a host OS** via a host-bridge (mirrored mode) | Q10 |
+| P-06 | Every module must be **safe, permission-respecting, and fully testable** | Q6 |
+| P-07 | The architecture is **modular** — swap any layer without breaking others | Q2, Q6 |
 
 ---
 
@@ -130,12 +144,8 @@ across devices?*
 
 Once all ten answers are committed here, the project moves to:
 
-1. **Architecture Decision Records** — one ADR per major component
-   (kernel, storage, AI pipeline, AURA daemon, HAL).
-2. **Component & data-flow diagrams** — visual map of how each layer
-   connects.
-3. **Dependency decisions** — which existing open-source foundations
-   (Linux kernel, LLVM, ONNX Runtime, etc.) to build on vs. build from
-   scratch.
-4. **First prototype spike** — SD-card boot to a minimal shell on the
-   primary target hardware.
+1. **Kernel architecture interview** — three kernel modes, scheduler, event
+   bus, HAL, and AURA↔kernel interface (see `KERNEL_ARCHITECTURE.md`).
+2. **Architecture Decision Records** — one ADR per major component.
+3. **Component & data-flow diagrams** — visual map of how each layer connects.
+4. **First prototype spike** — host-bridge boot to a minimal AURA shell.
