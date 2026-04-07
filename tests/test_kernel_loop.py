@@ -68,8 +68,8 @@ class TestKernelLoop:
 
     def test_tick_increments_count(self):
         loop, *_ = _make_loop()
-        assert loop._tick_count == 0
+        assert loop.tick_count() == 0
         loop.tick_once()
         loop.tick_once()
-        assert loop._tick_count == 2
+        assert loop.tick_count() == 2
 

@@ -87,6 +87,10 @@ class KernelLoop:
             "service_count": len(self._scheduler._service_registry),
         })
 
+    def tick_count(self) -> int:
+        """Return the total number of ticks completed by this loop."""
+        return self._tick_count
+
     def _on_shutdown(self, event: Event) -> None:
         logger.info("KernelLoop: SHUTDOWN event received — stopping loop")
         self.stop()

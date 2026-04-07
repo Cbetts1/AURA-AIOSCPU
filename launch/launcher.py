@@ -46,7 +46,7 @@ def detect_mode() -> str:
         return env_mode
 
     # Heuristic: if running as root → Internal mode
-    if os.getuid() == 0:
+    if hasattr(os, "getuid") and os.getuid() == 0:
         return "internal"
 
     # Default: Universal (no root, host-bridge only)

@@ -59,5 +59,5 @@ class TestHAL:
         region = mem.allocate("test_region", 1024)
         assert len(region) == 1024
         mem.free("test_region")
-        assert "test_region" not in mem._regions
+        assert not mem.has_region("test_region")
 

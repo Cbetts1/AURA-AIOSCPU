@@ -55,6 +55,10 @@ class VMemory:
         """Release a named memory region."""
         self._regions.pop(name, None)
 
+    def has_region(self, name: str) -> bool:
+        """Return True if a region with this name is currently allocated."""
+        return name in self._regions
+
     def release_all(self) -> None:
         """Release all regions."""
         self._regions.clear()
