@@ -1,0 +1,12 @@
+[Service]
+Name=storage
+Description=Rootfs and SD-card storage management
+Module=services.storage_service:StorageService
+AutoStart=true
+RestartPolicy=on-failure
+RestartDelay=3
+DependsOn=
+
+[Health]
+CheckInterval=60
+MaxFailures=2

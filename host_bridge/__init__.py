@@ -134,6 +134,11 @@ class HostBridge:
     """
 
     def __init__(self, host_type: str | None = None):
+        if host_type is not None and host_type not in SUPPORTED_HOSTS:
+            raise ValueError(
+                f"Unknown host type {host_type!r}. "
+                f"Supported: {sorted(SUPPORTED_HOSTS)}"
+            )
         self._bridge    = get_bridge()
         self._host_type = detect_host_type() if host_type is None else host_type
         self._mode      = "universal"
@@ -211,8 +216,9 @@ class HostBridge:
     # Capability query
     # ------------------------------------------------------------------
 
-    def available_capabilities(self) -> frozenset:
-        return self._bridge.available_capabilities()
+    def available_capabilities(self) -> set:
+        """Return the set of capabilities this host can provide."""
+        return set(self._bridge.available_capabilities())
 
     def get_sys_info(self) -> dict:
         return self._bridge.get_sys_info()
