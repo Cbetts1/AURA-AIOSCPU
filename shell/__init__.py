@@ -61,7 +61,11 @@ class Shell:
     def __init__(self, aura: AURA, event_bus: EventBus,
                  build_service=None, model_manager=None,
                  device_profile=None, web_terminal=None,
-                 network_service=None, package_manager=None):
+                 network_service=None, package_manager=None,
+                 kernel_api=None, storage_service=None,
+                 logging_service=None, job_queue=None,
+                 health_monitor=None, col=None,
+                 mirror=None, aura_privilege=None):
         self._aura            = aura
         self._event_bus       = event_bus
         self._build_svc       = build_service
@@ -70,13 +74,75 @@ class Shell:
         self._web_terminal    = web_terminal
         self._network_svc     = network_service
         self._pkg_mgr         = package_manager
+        self._kernel_api      = kernel_api
+        self._storage_svc     = storage_service
+        self._logging_svc     = logging_service
+        self._job_queue       = job_queue
+        self._health_monitor  = health_monitor
+        self._col             = col
+        self._mirror          = mirror
+        self._aura_privilege  = aura_privilege
+        self._kernel          = None          # attached after kernel.start()
         self._running         = False
         self._history: list[str] = []
+        self._history_file    = self._resolve_history_file()
+        self._load_history()
         self._start_time      = time.monotonic()
         self._cwd             = os.path.expanduser("~")
         self._builtins        = self._register_builtins()
+        self._load_plugins()
         self._event_bus.subscribe("PERMISSION_REQUEST",
                                   self._handle_permission_request)
+
+    def _resolve_history_file(self) -> str:
+        """Return a writable path for persistent history."""
+        try:
+            from bridge import get_bridge
+            bridge = get_bridge()
+            data_dir = bridge.get_aura_data_dir()
+            return os.path.join(data_dir, "shell_history")
+        except Exception:
+            return os.path.join(os.path.expanduser("~"), ".aura_history")
+
+    def _load_history(self) -> None:
+        try:
+            if os.path.isfile(self._history_file):
+                with open(self._history_file) as fh:
+                    self._history = [
+                        l.rstrip("\n") for l in fh
+                        if l.strip()
+                    ][-_HISTORY_LIMIT:]
+        except Exception:
+            pass
+
+    def _save_history(self) -> None:
+        try:
+            os.makedirs(os.path.dirname(self._history_file), exist_ok=True)
+            with open(self._history_file, "w") as fh:
+                for line in self._history[-_HISTORY_LIMIT:]:
+                    fh.write(line + "\n")
+        except Exception:
+            pass
+
+    def _load_plugins(self) -> None:
+        """Load shell plugins from shell/plugins/."""
+        try:
+            from shell.plugin_loader import PluginLoader
+            loader = PluginLoader()
+            loader.load_all()
+            for cmd, fn in loader.all_commands().items():
+                if cmd not in self._builtins:
+                    # Wrap plugin handler to pass shell instance
+                    def _make_handler(handler):
+                        def _h(args, _handler=handler):
+                            return _handler(self, args)
+                        return _h
+                    self._builtins[cmd] = _make_handler(fn)
+            for cmd, text in loader.all_help().items():
+                self._plugin_help = getattr(self, "_plugin_help", {})
+                self._plugin_help[cmd] = text
+        except Exception as exc:
+            logger.debug("Shell: plugin load failed: %s", exc)
 
     # ------------------------------------------------------------------
     # Main loop
@@ -104,6 +170,7 @@ class Shell:
     def stop(self) -> None:
         """Signal the shell loop to exit."""
         self._running = False
+        self._save_history()
 
     # ------------------------------------------------------------------
     # Command dispatch

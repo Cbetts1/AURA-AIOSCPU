@@ -1,0 +1,12 @@
+[Service]
+Name=logging
+Description=Structured log aggregation
+Module=services.logging_service:LoggingService
+AutoStart=true
+RestartPolicy=always
+RestartDelay=2
+DependsOn=storage
+
+[Health]
+CheckInterval=60
+MaxFailures=3

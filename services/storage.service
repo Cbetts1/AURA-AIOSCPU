@@ -1,0 +1,5 @@
+name        = storage
+entrypoint  = services/storage_service.py
+autostart   = true
+restart     = on-failure
+description = Rootfs partition manager and SD-card mounter
