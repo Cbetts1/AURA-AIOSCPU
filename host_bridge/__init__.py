@@ -10,7 +10,7 @@ than touching hardware directly.
 Supported host types
 --------------------
   linux    — POSIX + Linux-specific APIs  (implemented)
-  android  — Android/Termux bridge        (stub)
+  android  — Android/Termux bridge        (implemented)
   macos    — POSIX + macOS APIs           (stub)
   windows  — Win32 / WSL bridge           (stub)
 
@@ -21,6 +21,7 @@ Responsibilities
 - Provide a virtual display adapter backed by the host display system.
 - Proxy syscalls to the host with permission enforcement.
 - Enforce Universal / Internal mode capability boundaries.
+- Auto-detect Android / Termux and delegate to AndroidHostBridge.
 """
 
 import logging
@@ -45,6 +46,25 @@ _INTERNAL_ALLOWED = _UNIVERSAL_ALLOWED | {
     "net_listen", "net_raw",
     "sys_info",
 }
+
+
+def detect_host_type() -> str:
+    """Auto-detect the host OS type, including Android/Termux."""
+    # Check for Android / Termux first
+    if (
+        os.environ.get("TERMUX_VERSION")
+        or os.path.exists("/data/data/com.termux")
+        or "com.termux" in os.environ.get("HOME", "")
+    ):
+        return "android"
+    system = platform.system().lower()
+    if system == "linux":
+        return "linux"
+    if system == "darwin":
+        return "macos"
+    if system == "windows":
+        return "windows"
+    return "linux"  # safe default
 
 
 # ---------------------------------------------------------------------------
@@ -114,7 +134,9 @@ class HostDisplayAdapter:
 class HostBridge:
     """Unified host-OS bridge — one API regardless of underlying OS."""
 
-    def __init__(self, host_type: str = "linux"):
+    def __init__(self, host_type: str | None = None):
+        if host_type is None:
+            host_type = detect_host_type()
         if host_type not in SUPPORTED_HOSTS:
             raise ValueError(
                 f"Unknown host type {host_type!r}. "
@@ -124,6 +146,13 @@ class HostBridge:
         self._mode = "universal"          # updated by kernel mode activation
         self._granted_permissions: set[str] = set()
         self._adapters: dict[str, object] = {}
+
+        # If Android, delegate to the dedicated implementation
+        self._android_bridge = None
+        if host_type == "android":
+            from host_bridge.android import AndroidHostBridge
+            self._android_bridge = AndroidHostBridge()
+
         logger.info("HostBridge: initialised for host=%r", host_type)
 
     # ------------------------------------------------------------------
@@ -186,6 +215,8 @@ class HostBridge:
 
     def available_capabilities(self) -> set:
         """Return the set of capabilities the host can provide."""
+        if self._android_bridge:
+            return self._android_bridge.available_capabilities()
         caps = set(_UNIVERSAL_ALLOWED)
         if self._host_type in ("linux", "macos"):
             caps.add("sys_info")
@@ -204,17 +235,18 @@ class HostBridge:
         return _UNIVERSAL_ALLOWED
 
     def _dispatch(self, call: str, *args):
-        """Minimal host dispatch table."""
+        """Dispatch syscall to Android bridge or generic POSIX handler."""
+        if self._android_bridge:
+            return self._android_bridge.syscall(call, *args)
         if call == "sys_info":
             return {
-                "os": platform.system(),
+                "os":      platform.system(),
                 "release": platform.release(),
                 "machine": platform.machine(),
             }
         if call == "fs_list":
             path = args[0] if args else "."
             return os.listdir(path)
-        # Other calls are stubs for now
         logger.debug("HostBridge: stub dispatch for %r", call)
         return None
 

@@ -1,1 +1,10 @@
 pytest>=7.0
+
+# Optional — enhanced system metrics (strongly recommended on desktop/phone)
+# psutil>=5.9
+
+# Optional — on-device AI inference (GGUF format, ARM64 optimised)
+# llama-cpp-python>=0.2
+
+# Optional — ONNX model inference
+# onnxruntime>=1.16

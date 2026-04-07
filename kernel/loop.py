@@ -11,6 +11,12 @@ Responsibilities (each tick)
 4. Refresh the global system state.
 
 The loop runs until stop() is called (e.g. by a SHUTDOWN event).
+
+Adaptive tick rate
+------------------
+When the system is idle (no tasks, no events) the interval doubles each
+cycle up to ``max_tick_interval_ms`` to reduce power consumption on
+mobile devices.  Any activity resets the interval to the base value.
 """
 
 import logging
@@ -22,19 +28,61 @@ from aura import AURA
 
 logger = logging.getLogger(__name__)
 
-TICK_INTERVAL_MS = 16  # ~60 Hz — adjust based on workload measurements
+_DEFAULT_TICK_MS     = 16     # ~60 Hz — overridden by config/device profile
+_MAX_IDLE_TICK_MS    = 1000   # maximum 1-second interval when fully idle
+_IDLE_BACKOFF_FACTOR = 2      # multiply interval by this when idle
+
+
+class AdaptiveTick:
+    """
+    Tracks the current loop interval and adjusts it based on system activity.
+
+    Busy tick (tasks/events pending)  → interval snaps back to base_ms
+    Idle  tick (nothing to do)        → interval doubles up to max_ms
+    """
+
+    def __init__(self, base_ms: int = _DEFAULT_TICK_MS,
+                 max_ms: int = _MAX_IDLE_TICK_MS,
+                 backoff_factor: int = _IDLE_BACKOFF_FACTOR):
+        self._base    = base_ms
+        self._max     = max_ms
+        self._factor  = backoff_factor
+        self._current = base_ms
+        self._idle_ticks = 0
+
+    @property
+    def interval_ms(self) -> int:
+        return self._current
+
+    def mark_busy(self) -> None:
+        self._idle_ticks = 0
+        self._current    = self._base
+
+    def mark_idle(self) -> None:
+        self._idle_ticks += 1
+        if self._idle_ticks > 3:                        # grace period
+            self._current = min(
+                self._current * self._factor, self._max
+            )
 
 
 class KernelLoop:
     """Runs continuously until stop() is called."""
 
-    def __init__(self, scheduler: Scheduler, event_bus: EventBus, aura: AURA):
+    def __init__(self, scheduler: Scheduler, event_bus: EventBus, aura: AURA,
+                 tick_interval_ms: int = _DEFAULT_TICK_MS,
+                 adaptive: bool = True,
+                 max_tick_interval_ms: int = _MAX_IDLE_TICK_MS):
         self._scheduler = scheduler
         self._event_bus = event_bus
-        self._aura = aura
-        self._stopping = False
+        self._aura      = aura
+        self._stopping  = False
         self._tick_count = 0
         self._system_state: dict = {}
+        self._adaptive_tick = AdaptiveTick(
+            base_ms=tick_interval_ms,
+            max_ms=max_tick_interval_ms if adaptive else tick_interval_ms,
+        )
 
         # Stop the loop when a SHUTDOWN event arrives
         self._event_bus.subscribe("SHUTDOWN", self._on_shutdown)
@@ -45,10 +93,11 @@ class KernelLoop:
 
     def run(self) -> None:
         """Enter the main loop. Blocks until stop() is called."""
-        logger.info("KernelLoop: starting")
+        logger.info("KernelLoop: starting (base_tick=%dms)",
+                    self._adaptive_tick._base)
         while not self._stopping:
             self._tick()
-            time.sleep(TICK_INTERVAL_MS / 1000.0)
+            time.sleep(self._adaptive_tick.interval_ms / 1000.0)
         logger.info("KernelLoop: stopped after %d ticks", self._tick_count)
 
     def stop(self) -> None:
@@ -69,14 +118,21 @@ class KernelLoop:
 
     def _tick(self) -> None:
         self._tick_count += 1
-        self._dispatch_events()
-        self._scheduler.tick()
+        events_dispatched = self._dispatch_events()
+        tasks_ran         = self._scheduler.tick()
         self._update_system_state()
         self._aura.pulse(self._system_state)
 
-    def _dispatch_events(self) -> None:
-        """Drain the event bus and deliver events to subscribers."""
-        self._event_bus.drain()
+        # Adaptive tick: back off when the system is idle
+        if events_dispatched or tasks_ran:
+            self._adaptive_tick.mark_busy()
+        else:
+            self._adaptive_tick.mark_idle()
+
+    def _dispatch_events(self) -> int:
+        """Drain the event bus and deliver events to subscribers.
+        Returns the number of events dispatched."""
+        return self._event_bus.drain()
 
     def _update_system_state(self) -> None:
         """Refresh the system state snapshot passed to AURA each tick."""

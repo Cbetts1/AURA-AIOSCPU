@@ -27,16 +27,17 @@ logger = logging.getLogger(__name__)
 class AURA:
     """The kernel personality layer."""
 
-    def __init__(self, event_bus: EventBus):
-        self._event_bus = event_bus
-        self._snapshot: dict = {}
-        self._model = None  # model_manager — stub until AI pipeline is wired
+    def __init__(self, event_bus: EventBus, model_manager=None):
+        self._event_bus    = event_bus
+        self._snapshot:    dict = {}
+        self._model_manager = model_manager   # ModelManager | None
 
         # Subscribe to key system events so AURA always knows what happened
         for event_type in (
             "SERVICE_REGISTERED", "SERVICE_STARTED", "SERVICE_STOPPED",
             "MODE_ACTIVATED", "PERMISSION_REQUEST", "PERMISSION_RESPONSE",
-            "SHUTDOWN",
+            "SHUTDOWN", "BUILD_COMPLETE", "HEALTH_CHECK", "INTEGRITY_ALERT",
+            "SERVICE_RESTARTING",
         ):
             self._event_bus.subscribe(event_type, self._on_system_event)
 
@@ -58,18 +59,19 @@ class AURA:
     def query(self, prompt: str) -> str:
         """Answer a natural-language query using live system context.
 
-        Returns a plain-text response string.
-        Until the AI model is wired in, returns a context-aware stub reply.
+        Routes to the active AI model when one is loaded, otherwise
+        returns a context-aware stub reply so the shell is always usable.
         """
+        context = self._snapshot
+        if self._model_manager is not None:
+            return self._model_manager.infer(prompt, context)
         context_summary = ", ".join(
-            f"{k}={v}" for k, v in list(self._snapshot.items())[:5]
+            f"{k}={v}" for k, v in list(context.items())[:5]
         )
-        if self._model is not None:
-            return self._model.infer(prompt, self._snapshot)
-        # Stub: echo the prompt with context until model is available
         return (
-            f"[AURA stub] Received: {prompt!r}. "
-            f"System context: {context_summary or 'none yet'}."
+            f"[AURA] {prompt!r}\n"
+            f"Context: {context_summary or 'none yet'}.\n"
+            f"Tip: load a model with  model load <name>"
         )
 
     # ------------------------------------------------------------------

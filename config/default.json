@@ -1,0 +1,54 @@
+{
+  "kernel": {
+    "tick_interval_ms": 16,
+    "max_task_queue": 1000,
+    "adaptive_tick": true,
+    "idle_backoff_factor": 2,
+    "max_tick_interval_ms": 1000
+  },
+  "aura": {
+    "model_dir": "models",
+    "active_model": null,
+    "context_window": 4096,
+    "max_response_tokens": 512,
+    "response_cache_size": 128
+  },
+  "services": {
+    "autostart": true,
+    "max_services": 32,
+    "restart_backoff_ms": 5000,
+    "max_restart_attempts": 5
+  },
+  "hal": {
+    "storage_path": "rootfs/var/aura.db",
+    "max_memory_mb": 512,
+    "storage_backend": "sqlite"
+  },
+  "logging": {
+    "level": "INFO",
+    "log_dir": "logs",
+    "max_log_size_mb": 10,
+    "rotation_count": 3,
+    "structured": true
+  },
+  "mobile": {
+    "power_save": false,
+    "tick_interval_ms": 100,
+    "max_memory_mb": 256,
+    "max_task_queue": 256
+  },
+  "watchdog": {
+    "enabled": true,
+    "check_interval_ms": 5000,
+    "max_failures": 3,
+    "auto_restart": true
+  },
+  "build": {
+    "output_dir": "dist",
+    "rootfs_dir": "rootfs",
+    "packages": [
+      "kernel", "hal", "aura", "services", "shell",
+      "host_bridge", "models", "tools", "config", "launch"
+    ]
+  }
+}

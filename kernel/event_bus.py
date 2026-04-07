@@ -78,14 +78,18 @@ class EventBus:
         """Enqueue an event for delivery on the next drain() call."""
         heapq.heappush(self._queue, event)
 
-    def drain(self) -> None:
+    def drain(self) -> int:
         """Deliver all queued events to their subscribers.
 
         Called once per kernel loop tick. Errors in callbacks are logged
         but do not halt delivery of remaining events.
+
+        Returns the number of events dispatched.
         """
+        count = 0
         while self._queue:
             event = heapq.heappop(self._queue)
+            count += 1
             for cb in list(self._subscribers.get(event.event_type, [])):
                 try:
                     cb(event)
@@ -93,4 +97,5 @@ class EventBus:
                     logger.exception(
                         "EventBus: subscriber error on event %r", event
                     )
+        return count
 

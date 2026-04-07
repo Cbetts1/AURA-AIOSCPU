@@ -1,111 +1,251 @@
+<div align="center">
+
 # AURA-AIOSCPU
 
-> **A real, portable, AI-driven operating system.**
+**AI-Driven Universal OS — Runs on Anything. Repairs Itself. Thinks for You.**
 
-AURA-AIOSCPU is built from scratch to run on any device — on your phone,
-inside your phone, on top of any OS, or projected directly into hardware.
-AURA is not an app. AURA is the kernel's intelligence.
+[![Tests](https://img.shields.io/badge/tests-189%20passing-brightgreen)](tests/)
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://python.org)
+[![Platform](https://img.shields.io/badge/platform-Android%20%7C%20Linux%20%7C%20macOS%20%7C%20Windows-lightgrey)](#)
+[![Architecture](https://img.shields.io/badge/arch-ARM64%20%7C%20x86__64%20%7C%20ARM-orange)](#)
+[![License](https://img.shields.io/badge/license-MIT-green)](#)
 
-## Project Status
+*The operating system that runs on your phone, laptop, SD card, or cloud server —
+with a built-in AI that watches your system, answers your questions, and fixes
+itself if something breaks.*
 
-| Phase | Status |
-|-------|--------|
-| 🔍 Vision & Requirements | ✅ Complete |
-| 📐 Architecture Design | ✅ Complete |
-| 🗂️ Skeleton repo | ✅ Complete |
-| 🛠️ Kernel implementation | 🔜 Next |
-| 💾 Storage subsystem | 🔜 Pending |
-| 🤖 AURA integration | 🔜 Pending |
-| 📱 Mobile / host-bridge | 🔜 Pending |
-| 💿 SD-card boot image | 🔜 Pending |
-| 🔌 Hardware projection | 🔜 Pending |
+</div>
 
-## Architecture at a Glance
+---
 
-```
-SD Card / Host Filesystem
-├── /launch/launcher.py       ← boot entry point
-├── /services/                ← service unit files
-├── /models/                  ← AURA AI model files
-├── /config/                  ← runtime config overrides
-├── /logs/                    ← persistent cross-boot logs
-└── /rootfs/                  ← the OS root filesystem
-    ├── bin/   etc/   home/
-    ├── tmp/   usr/   var/
+## ✨ What Makes AURA Different
 
-Source Layout
-├── kernel/                   ← kernel core
-│   ├── __init__.py           ← Kernel class (mode + subsystem init)
-│   ├── loop.py               ← heartbeat: events → schedule → AURA pulse
-│   ├── scheduler.py          ← tasks, services, background jobs
-│   ├── event_bus.py          ← sole comms channel: kernel↔services↔shell↔AURA
-│   └── modes/
-│       ├── universal.py      ← runs on any OS via host-bridge (no root)
-│       ├── internal.py       ← runs inside OS with user-granted permissions
-│       └── hardware.py       ← projects runtime into hardware (explicit consent)
-├── hal/                      ← Hardware Abstraction Layer
-│   └── __init__.py           ← vCPU, vMemory, vDevices, vBus
-├── aura/                     ← kernel personality layer
-│   └── __init__.py           ← observes all state; advises; responds; acts
-├── shell/                    ← text shell, AURA-integrated
-│   └── __init__.py
-├── host_bridge/              ← unified API for Android, Linux, etc.
-│   └── __init__.py
-├── services/                 ← service manager
-│   └── __init__.py
-├── launch/                   ← boot launcher (outside rootfs)
-│   └── launcher.py
-└── tests/                    ← unit + integration test suite
-    ├── test_kernel_loop.py
-    ├── test_scheduler.py
-    ├── test_event_bus.py
-    ├── test_hal.py
-    ├── test_aura.py
-    ├── test_shell.py
-    ├── test_bridge.py
-    └── test_services.py
-```
+| Feature | AURA-AIOSCPU | Traditional OS |
+|---------|-------------|----------------|
+| **Runs on Android/Termux** | ✅ One command | ❌ Reflash required |
+| **Self-repairs on crash** | ✅ Watchdog daemon | ❌ Manual restart |
+| **Rebuilds itself from source** | ✅ `rebuild` in shell | ❌ External build system |
+| **AI assistant built in** | ✅ Always live context | ❌ Add-on app |
+| **Zero native dependencies** | ✅ Pure Python stdlib | ❌ Requires toolchain |
+| **Mobile battery saving** | ✅ Adaptive tick rate | ❌ Fixed polling |
+| **SQLite virtual storage** | ✅ No filesystem mount | ❌ Partition required |
 
-## Design Documents
+---
 
-| Document | Contents |
-|----------|----------|
-| [FIRST_INTERVIEW.md](FIRST_INTERVIEW.md) | 10 founding questions + answers + design principles |
-| [KERNEL_ARCHITECTURE.md](KERNEL_ARCHITECTURE.md) | Kernel modes, loop, scheduler, event bus, HAL, AURA |
-| [STORAGE_ARCHITECTURE.md](STORAGE_ARCHITECTURE.md) | rootfs layout, partition map, boot sequence |
-| [BUILD_AND_TOOLING.md](BUILD_AND_TOOLING.md) | Build, test, package, deploy, update pipeline |
-| [OS_FEATURES.md](OS_FEATURES.md) | Process model, memory, devices, identity, permissions, shell, host-bridge |
-| [OS_VISION_QUESTIONS.md](OS_VISION_QUESTIONS.md) | Full 65-question discovery reference |
+## 📱 Run on Your Android Phone (60 seconds)
 
-## Quick Start (once implemented)
+> **Requires:** Termux app from [F-Droid](https://f-droid.org/packages/com.termux/) + Python 3.10+
 
 ```bash
-# Install dev dependencies
+# 1. Install Termux from F-Droid (NOT Google Play)
+# 2. Open Termux and run:
+
+pkg install git python
+git clone https://github.com/Cbetts1/AURA-AIOSCPU
+cd AURA-AIOSCPU
+bash install_termux.sh
+```
+
+That's it. `install_termux.sh` installs dependencies, builds the rootfs,
+runs a compatibility check, and launches AURA — all automatically.
+
+**Check your phone is compatible first:**
+```bash
+python tools/check_requirements.py
+```
+
+---
+
+## 🖥️ Run on Desktop / Server
+
+```bash
+git clone https://github.com/Cbetts1/AURA-AIOSCPU
+cd AURA-AIOSCPU
 pip install -r requirements.txt
-
-# Run the test suite
-pytest tests/
-
-# Build the rootfs image
-python build.py
-
-# Deploy to SD card
-cp rootfs.img /dev/sdX
-
-# Or run in Universal Mode on top of your current OS
 python launch/launcher.py
 ```
 
-## Core Principles
+Or build first for a clean self-contained image:
 
-| # | Principle |
-|---|-----------|
-| 1 | AURA is part of the **kernel**, not an app |
-| 2 | The OS is **universally portable** — phone, any device, inside any OS |
-| 3 | Three kernel surfaces: **Universal · Internal · Hardware Projection** |
-| 4 | All hardware is **virtual by default** (vCPU, vMemory, vDevices, vBus) |
-| 5 | Host-bridge = **one unified API** for Android, Linux, macOS, Windows |
-| 6 | All elevated actions require **explicit user consent** |
-| 7 | Every module is **modular, safe, and fully testable** |
-| 8 | Updates = **full rootfs rebuild** — atomic and reproducible |
+```bash
+python build.py --test     # run 189 tests, then build
+python dist/aura           # launch the built image
+```
 
+---
+
+## 🧠 Add AI Intelligence
+
+AURA ships in **stub mode** — it always works, even without a model file.
+To add a real AI brain, drop a GGUF model file into `models/`:
+
+```bash
+# Download a small phone-friendly model (1-4 GB GGUF)
+# Example: Phi-2, TinyLlama, Mistral-7B-Q4
+cp ~/Downloads/phi-2.Q4_K_M.gguf models/
+
+# Then inside the AURA shell:
+aura> model scan          # auto-register new files
+aura> model load phi-2    # activate
+aura> What services are running?   # ask anything
+```
+
+Supported model formats: **GGUF** (llama-cpp-python), **ONNX** (onnxruntime).
+Both are optional — AURA falls back to a context-aware stub if not installed.
+
+---
+
+## 🔧 Shell Commands
+
+```
+aura> help            show this list
+aura> status          kernel state snapshot
+aura> services        registered services and states
+aura> sysinfo         full JSON system snapshot
+aura> device          hardware profile + phone compatibility info
+aura> model list      show registered AI models
+aura> model load X    activate a model
+aura> model scan      auto-discover new model files
+aura> build           rebuild AURA rootfs from source (self-build)
+aura> repair          verify file integrity, show what changed
+aura> test            run 189 unit tests from inside the live OS
+aura> logs [N]        show last N log lines
+aura> exit            shutdown
+aura> <anything>      ask AURA directly
+```
+
+---
+
+## 🏗️ Architecture
+
+```
+┌─────────────────────────────────────────────────────┐
+│                   User / Shell                      │  ← text interface, permission prompts
+├─────────────────────────────────────────────────────┤
+│                     AURA                            │  ← AI personality, pulsed every tick
+│              (Model Manager + Stub)                 │
+├──────────────┬──────────────┬──────────────────────┤
+│  Scheduler   │  EventBus    │  Service Manager      │  ← tasks, events, long-lived services
+├──────────────┴──────────────┴──────────────────────┤
+│              Kernel Loop  (Adaptive Tick)           │  ← 16 ms desktop / 100 ms mobile
+├─────────────────────────────────────────────────────┤
+│  KernelWatchdog  │  BuildService  │  Config          │  ← self-repair / self-build / tuning
+├─────────────────────────────────────────────────────┤
+│           Hardware Abstraction Layer (HAL)          │
+│    vCPU  │  vMemory  │  vBus  │  VStorageDevice     │  ← SQLite-backed, mobile-safe
+├─────────────────────────────────────────────────────┤
+│              Host Bridge                            │  ← Android / Linux / macOS / Windows
+│    (auto-detects Termux, routes syscalls)           │
+└─────────────────────────────────────────────────────┘
+```
+
+### Key Design Decisions
+
+- **Adaptive tick rate** — the kernel loop slows from 16 ms to 1 second when idle, saving battery on phones without sacrificing responsiveness when busy.
+- **SQLite virtual storage** — ships in Python stdlib, works on ARM64 without native compilation, single-file DB you can copy to an SD card.
+- **Self-repair watchdog** — a daemon thread monitors all services every 5 seconds and restarts any that crash, with exponential backoff and a failure cap.
+- **Self-build service** — the running OS can rebuild its own rootfs, run the test suite, and verify SHA-256 file integrity — all from a shell command.
+- **Zero required dependencies** — only Python 3.10+ stdlib. AI inference, enhanced metrics, and ONNX are optional.
+
+---
+
+## 🔬 Developer Tools
+
+```bash
+python tools/aura_sys_info.py         # hardware profile + compatibility check
+python tools/check_requirements.py    # pre-flight checker for any device
+python tools/aura_logs.py             # view / follow live logs
+python tools/aura_service_status.py   # inspect service unit files
+```
+
+---
+
+## 🧪 Testing
+
+```bash
+python -m pytest tests/ -v    # 189 tests across 14 modules
+```
+
+Test coverage:
+- Kernel loop, scheduler, event bus, HAL, modes
+- AURA personality, shell, host bridge, services
+- **Config** — loading, merging, env overrides, mobile profile, persistence
+- **Device profile** — architecture detection, tick recommendations
+- **VStorageDevice** — KV store, file store, SQLite integrity, stats
+- **KernelWatchdog** — failure tracking, auto-restart, backoff, event publishing
+- **BuildService** — rootfs build, integrity verification, event lifecycle
+- **ModelManager** — register, load/unload, scan, thread safety, stub fallback
+
+---
+
+## ⚙️ Configuration
+
+Edit `config/default.json` or create `config/user.json` for overrides.
+Environment variables: `AURA_CFG_<SECTION>_<KEY>=value`
+
+```bash
+# Force mobile mode on any device:
+AURA_CFG_KERNEL_TICK_INTERVAL_MS=100 python launch/launcher.py
+
+# Force a specific mode:
+AURA_MODE=universal python launch/launcher.py
+```
+
+**Mobile profile** is applied automatically when running on Android/Termux:
+- Tick rate: 100 ms (10 Hz) instead of 16 ms
+- Max memory: 256 MB instead of 512 MB
+- Task queue: 256 instead of 1 000
+
+---
+
+## 📋 Requirements
+
+| Requirement | Minimum | Recommended |
+|-------------|---------|-------------|
+| Python | 3.10 | 3.12+ |
+| RAM | 256 MB | 1 GB+ |
+| Storage | 100 MB | 500 MB+ |
+| Architecture | Any Python-supported | ARM64 / x86_64 |
+
+**Optional for AI inference:**
+- `pip install llama-cpp-python` — GGUF models on ARM64/x86_64
+- `pip install onnxruntime` — ONNX models
+- `pip install psutil` — enhanced metrics
+
+---
+
+## 🗂️ Project Structure
+
+```
+AURA-AIOSCPU/
+├── launch/         # Boot sequence (launcher.py)
+├── kernel/         # Core: loop, scheduler, event bus, modes, watchdog, config
+├── aura/           # AI personality layer
+├── hal/            # Hardware abstraction: vCPU, vMemory, vBus, VStorageDevice
+├── services/       # Service manager + BuildService (self-build/repair)
+├── shell/          # Interactive shell with all built-in commands
+├── host_bridge/    # Host OS adapter (Android/Termux, Linux, macOS, Windows)
+├── models/         # AI model manager (GGUF, ONNX, stub)
+├── tools/          # Developer CLI tools
+├── config/         # default.json + user.json (gitignored)
+├── rootfs/         # Minimal root filesystem layout
+├── tests/          # 189 tests across 14 modules
+├── build.py        # Build script → dist/
+└── install_termux.sh  # One-command Android/Termux installer
+```
+
+---
+
+## 🤝 Contributing
+
+1. Fork → branch → code → `python -m pytest tests/` (all 189 must pass)
+2. Run `python build.py --test` to build and verify
+3. Pull request
+
+---
+
+<div align="center">
+
+**AURA-AIOSCPU** — *Built to run everywhere. Designed to think. Made to last.*
+
+</div>

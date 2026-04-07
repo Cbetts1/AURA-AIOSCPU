@@ -96,13 +96,15 @@ class Scheduler:
     # Tick (called by KernelLoop each iteration)
     # ------------------------------------------------------------------
 
-    def tick(self) -> None:
-        """Advance the scheduler by one unit of work."""
+    def tick(self) -> int:
+        """Advance the scheduler by one unit of work. Returns tasks/jobs run."""
+        ran = 0
         # Run the single highest-priority pending task (if any)
         if self._task_queue:
             entry = heapq.heappop(self._task_queue)
             try:
                 entry.task()
+                ran += 1
             except Exception:
                 logger.exception("Scheduler: task raised an exception")
 
@@ -113,11 +115,13 @@ class Scheduler:
             next_run, interval_ms, job = entry
             try:
                 job()
+                ran += 1
             except Exception:
                 logger.exception("Scheduler: job raised an exception")
             # Re-schedule the job
             entry[0] = now + interval_ms / 1000.0
             heapq.heappush(self._job_queue, entry)
+        return ran
 
     # ------------------------------------------------------------------
     # Internal helpers
