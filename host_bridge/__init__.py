@@ -7,12 +7,12 @@ This is what makes the OS "mirrored" — it can run on top of Android,
 Linux, macOS, or Windows by routing all I/O through this bridge rather
 than touching hardware directly.
 
-Supported host types (planned)
--------------------------------
-  android  — uses Android APIs (JNI / ADB / Termux bridge)
-  linux    — uses POSIX + Linux-specific APIs
-  macos    — uses POSIX + macOS-specific APIs
-  windows  — uses Win32 / WSL bridge
+Supported host types
+--------------------
+  linux    — POSIX + Linux-specific APIs  (implemented)
+  android  — Android/Termux bridge        (stub)
+  macos    — POSIX + macOS APIs           (stub)
+  windows  — Win32 / WSL bridge           (stub)
 
 Responsibilities
 ----------------
@@ -23,33 +23,142 @@ Responsibilities
 - Enforce Universal / Internal mode capability boundaries.
 """
 
+import logging
+import os
+import platform
+import socket
+
+logger = logging.getLogger(__name__)
+
+SUPPORTED_HOSTS = {"linux", "android", "macos", "windows"}
+
+# Syscalls that are allowed in Universal mode (no root required)
+_UNIVERSAL_ALLOWED = {
+    "fs_read", "fs_write", "fs_list",
+    "net_connect", "net_send", "net_recv",
+    "proc_spawn", "proc_kill",
+}
+
+# Additional syscalls available in Internal mode (user-granted)
+_INTERNAL_ALLOWED = _UNIVERSAL_ALLOWED | {
+    "fs_chmod", "fs_mount_bind",
+    "net_listen", "net_raw",
+    "sys_info",
+}
+
+
+# ---------------------------------------------------------------------------
+# Adapter stubs
+# ---------------------------------------------------------------------------
+
+class HostNetworkAdapter:
+    """Virtual network device backed by the host network stack."""
+
+    def __init__(self, host_type: str):
+        self._host_type = host_type
+
+    def connect(self, host: str, port: int) -> socket.socket:
+        """Open a TCP connection through the host network stack."""
+        sock = socket.create_connection((host, port))
+        logger.debug("HostNetworkAdapter: connected to %s:%d", host, port)
+        return sock
+
+    def __repr__(self):
+        return f"HostNetworkAdapter(host={self._host_type!r})"
+
+
+class HostFilesystemAdapter:
+    """Virtual filesystem device rooted at a host directory."""
+
+    def __init__(self, root_path: str, host_type: str):
+        self._root = root_path
+        self._host_type = host_type
+
+    def full_path(self, rel: str) -> str:
+        """Resolve a relative path inside this adapter's root."""
+        return os.path.join(self._root, rel.lstrip("/"))
+
+    def read(self, rel: str) -> bytes:
+        with open(self.full_path(rel), "rb") as fh:
+            return fh.read()
+
+    def write(self, rel: str, data: bytes) -> None:
+        with open(self.full_path(rel), "wb") as fh:
+            fh.write(data)
+
+    def list(self, rel: str = "") -> list[str]:
+        return os.listdir(self.full_path(rel))
+
+    def __repr__(self):
+        return f"HostFilesystemAdapter(root={self._root!r})"
+
+
+class HostDisplayAdapter:
+    """Virtual display device — stub until a GUI backend is wired in."""
+
+    def __init__(self, host_type: str):
+        self._host_type = host_type
+
+    def print_line(self, text: str) -> None:
+        """Minimal display: print to stdout."""
+        print(text)
+
+    def __repr__(self):
+        return f"HostDisplayAdapter(host={self._host_type!r})"
+
+
+# ---------------------------------------------------------------------------
+# HostBridge
+# ---------------------------------------------------------------------------
 
 class HostBridge:
     """Unified host-OS bridge — one API regardless of underlying OS."""
 
     def __init__(self, host_type: str = "linux"):
-        # TODO: self._host_type = host_type
-        # TODO: self._adapters = {}   ← lazily initialised adapters
-        pass
+        if host_type not in SUPPORTED_HOSTS:
+            raise ValueError(
+                f"Unknown host type {host_type!r}. "
+                f"Supported: {SUPPORTED_HOSTS}"
+            )
+        self._host_type = host_type
+        self._mode = "universal"          # updated by kernel mode activation
+        self._granted_permissions: set[str] = set()
+        self._adapters: dict[str, object] = {}
+        logger.info("HostBridge: initialised for host=%r", host_type)
+
+    # ------------------------------------------------------------------
+    # Mode / permission management
+    # ------------------------------------------------------------------
+
+    def set_mode(self, mode: str,
+                 granted_permissions: set | None = None) -> None:
+        """Called by the kernel mode to configure the bridge."""
+        self._mode = mode
+        self._granted_permissions = granted_permissions or set()
 
     # ------------------------------------------------------------------
     # Virtual device adapters
     # ------------------------------------------------------------------
 
-    def get_network_adapter(self):
+    def get_network_adapter(self) -> HostNetworkAdapter:
         """Return a virtual network device backed by the host network stack."""
-        # TODO: return HostNetworkAdapter(self._host_type)
-        pass
+        if "net" not in self._adapters:
+            self._adapters["net"] = HostNetworkAdapter(self._host_type)
+        return self._adapters["net"]  # type: ignore[return-value]
 
-    def get_filesystem_adapter(self, root_path: str):
-        """Return a virtual filesystem device rooted at root_path on the host."""
-        # TODO: return HostFilesystemAdapter(root_path, self._host_type)
-        pass
+    def get_filesystem_adapter(self, root_path: str) -> HostFilesystemAdapter:
+        """Return a virtual filesystem device rooted at root_path."""
+        key = f"fs:{root_path}"
+        if key not in self._adapters:
+            self._adapters[key] = HostFilesystemAdapter(root_path,
+                                                        self._host_type)
+        return self._adapters[key]  # type: ignore[return-value]
 
-    def get_display_adapter(self):
-        """Return a virtual display device backed by the host display system."""
-        # TODO: return HostDisplayAdapter(self._host_type)
-        pass
+    def get_display_adapter(self) -> HostDisplayAdapter:
+        """Return a virtual display device."""
+        if "display" not in self._adapters:
+            self._adapters["display"] = HostDisplayAdapter(self._host_type)
+        return self._adapters["display"]  # type: ignore[return-value]
 
     # ------------------------------------------------------------------
     # Syscall proxy
@@ -61,10 +170,15 @@ class HostBridge:
         Raises PermissionError if the call is not permitted in the current
         kernel mode.
         """
-        # TODO: check active kernel mode + granted permissions
-        # TODO: delegate to self._backend(call, *args)
-        # TODO: raise PermissionError for disallowed calls
-        pass
+        allowed = self._allowed_syscalls()
+        if call not in allowed:
+            raise PermissionError(
+                f"Syscall {call!r} is not permitted in "
+                f"{self._mode!r} mode."
+            )
+        logger.debug("HostBridge syscall: %r %r", call, args)
+        # Dispatch to host-specific implementations
+        return self._dispatch(call, *args)
 
     # ------------------------------------------------------------------
     # Capability query
@@ -72,6 +186,35 @@ class HostBridge:
 
     def available_capabilities(self) -> set:
         """Return the set of capabilities the host can provide."""
-        # TODO: introspect host environment
-        # TODO: return set of capability strings
-        return set()
+        caps = set(_UNIVERSAL_ALLOWED)
+        if self._host_type in ("linux", "macos"):
+            caps.add("sys_info")
+            caps.add("net_listen")
+        return caps
+
+    # ------------------------------------------------------------------
+    # Private helpers
+    # ------------------------------------------------------------------
+
+    def _allowed_syscalls(self) -> set:
+        if self._mode == "hardware":
+            return _INTERNAL_ALLOWED | {"hal_project"}
+        if self._mode == "internal":
+            return _INTERNAL_ALLOWED
+        return _UNIVERSAL_ALLOWED
+
+    def _dispatch(self, call: str, *args):
+        """Minimal host dispatch table."""
+        if call == "sys_info":
+            return {
+                "os": platform.system(),
+                "release": platform.release(),
+                "machine": platform.machine(),
+            }
+        if call == "fs_list":
+            path = args[0] if args else "."
+            return os.listdir(path)
+        # Other calls are stubs for now
+        logger.debug("HostBridge: stub dispatch for %r", call)
+        return None
+

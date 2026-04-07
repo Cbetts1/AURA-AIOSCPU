@@ -13,9 +13,14 @@ Responsibilities (each tick)
 The loop runs until stop() is called (e.g. by a SHUTDOWN event).
 """
 
-# TODO: from kernel.event_bus import EventBus
-# TODO: from kernel.scheduler import Scheduler
-# TODO: from aura import AURA
+import logging
+import time
+
+from kernel.event_bus import EventBus, Event, Priority
+from kernel.scheduler import Scheduler
+from aura import AURA
+
+logger = logging.getLogger(__name__)
 
 TICK_INTERVAL_MS = 16  # ~60 Hz — adjust based on workload measurements
 
@@ -23,13 +28,16 @@ TICK_INTERVAL_MS = 16  # ~60 Hz — adjust based on workload measurements
 class KernelLoop:
     """Runs continuously until stop() is called."""
 
-    def __init__(self, scheduler, event_bus, aura):
-        # TODO: self._scheduler = scheduler
-        # TODO: self._event_bus = event_bus
-        # TODO: self._aura = aura
-        # TODO: self._stopping = False
-        # TODO: self._system_state = {}
-        pass
+    def __init__(self, scheduler: Scheduler, event_bus: EventBus, aura: AURA):
+        self._scheduler = scheduler
+        self._event_bus = event_bus
+        self._aura = aura
+        self._stopping = False
+        self._tick_count = 0
+        self._system_state: dict = {}
+
+        # Stop the loop when a SHUTDOWN event arrives
+        self._event_bus.subscribe("SHUTDOWN", self._on_shutdown)
 
     # ------------------------------------------------------------------
     # Public interface
@@ -37,30 +45,49 @@ class KernelLoop:
 
     def run(self) -> None:
         """Enter the main loop. Blocks until stop() is called."""
-        # TODO: while not self._stopping:
-        #     self._dispatch_events()
-        #     self._scheduler.tick()
-        #     self._update_system_state()
-        #     self._aura.pulse(self._system_state)
-        #     sleep(TICK_INTERVAL_MS / 1000)
-        pass
+        logger.info("KernelLoop: starting")
+        while not self._stopping:
+            self._tick()
+            time.sleep(TICK_INTERVAL_MS / 1000.0)
+        logger.info("KernelLoop: stopped after %d ticks", self._tick_count)
 
     def stop(self) -> None:
         """Signal the loop to exit cleanly after the current tick."""
-        # TODO: self._stopping = True
-        pass
+        self._stopping = True
+
+    # ------------------------------------------------------------------
+    # Single tick (also callable directly in tests)
+    # ------------------------------------------------------------------
+
+    def tick_once(self) -> None:
+        """Execute exactly one tick without the sleep. Useful for tests."""
+        self._tick()
 
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
 
+    def _tick(self) -> None:
+        self._tick_count += 1
+        self._dispatch_events()
+        self._scheduler.tick()
+        self._update_system_state()
+        self._aura.pulse(self._system_state)
+
     def _dispatch_events(self) -> None:
         """Drain the event bus and deliver events to subscribers."""
-        # TODO: self._event_bus.drain()
-        pass
+        self._event_bus.drain()
 
     def _update_system_state(self) -> None:
         """Refresh the system state snapshot passed to AURA each tick."""
-        # TODO: collect: scheduler queue depth, service status, HAL stats
-        # TODO: update self._system_state dict
-        pass
+        self._system_state.update({
+            "tick": self._tick_count,
+            "task_queue_depth": len(self._scheduler._task_queue),
+            "job_queue_depth": len(self._scheduler._job_queue),
+            "service_count": len(self._scheduler._service_registry),
+        })
+
+    def _on_shutdown(self, event: Event) -> None:
+        logger.info("KernelLoop: SHUTDOWN event received — stopping loop")
+        self.stop()
+

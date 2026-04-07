@@ -23,7 +23,11 @@ Standard event types (add more as subsystems are defined)
   SHUTDOWN              the OS is shutting down
 """
 
-# TODO: import heapq
+import heapq
+import logging
+import time
+
+logger = logging.getLogger(__name__)
 
 
 class Priority:
@@ -36,38 +40,43 @@ class Priority:
 class Event:
     """A single message travelling on the event bus."""
 
+    _counter = 0  # tie-breaker so heapq never compares Event objects directly
+
     def __init__(self, event_type: str, payload=None,
                  priority: int = Priority.NORMAL, source: str = ""):
-        # TODO: self.event_type = event_type
-        # TODO: self.payload = payload
-        # TODO: self.priority = priority
-        # TODO: self.source = source
-        # TODO: self.timestamp = time.time()
-        pass
+        self.event_type = event_type
+        self.payload = payload
+        self.priority = priority
+        self.source = source
+        self.timestamp = time.time()
+        Event._counter += 1
+        self._seq = Event._counter
 
     def __lt__(self, other):
-        # Required so Event objects are orderable in a heapq.
-        # TODO: return self.priority < other.priority
-        pass
+        # heapq is a min-heap: lower priority number = higher urgency
+        if self.priority != other.priority:
+            return self.priority < other.priority
+        return self._seq < other._seq
+
+    def __repr__(self):
+        return (f"Event(type={self.event_type!r}, priority={self.priority}, "
+                f"source={self.source!r})")
 
 
 class EventBus:
     """In-process publish/subscribe event bus."""
 
     def __init__(self):
-        # TODO: self._subscribers = {}   ← {event_type: [callbacks]}
-        # TODO: self._queue = []         ← heapq of (priority, Event)
-        pass
+        self._subscribers: dict[str, list] = {}
+        self._queue: list = []  # heapq of Event objects
 
     def subscribe(self, event_type: str, callback) -> None:
         """Register a callback for a given event type."""
-        # TODO: self._subscribers.setdefault(event_type, []).append(callback)
-        pass
+        self._subscribers.setdefault(event_type, []).append(callback)
 
     def publish(self, event: Event) -> None:
         """Enqueue an event for delivery on the next drain() call."""
-        # TODO: heapq.heappush(self._queue, (event.priority, event))
-        pass
+        heapq.heappush(self._queue, event)
 
     def drain(self) -> None:
         """Deliver all queued events to their subscribers.
@@ -75,12 +84,13 @@ class EventBus:
         Called once per kernel loop tick. Errors in callbacks are logged
         but do not halt delivery of remaining events.
         """
-        # TODO: while self._queue:
-        #     _, event = heapq.heappop(self._queue)
-        #     for cb in self._subscribers.get(event.event_type, []):
-        #         try:
-        #             cb(event)
-        #         except Exception as exc:
-        #             # TODO: log error without crashing the bus
-        #             pass
-        pass
+        while self._queue:
+            event = heapq.heappop(self._queue)
+            for cb in list(self._subscribers.get(event.event_type, [])):
+                try:
+                    cb(event)
+                except Exception:
+                    logger.exception(
+                        "EventBus: subscriber error on event %r", event
+                    )
+

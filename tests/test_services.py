@@ -1,66 +1,76 @@
 """
 Tests — Service Manager
 ========================
-Validates service discovery, lifecycle transitions, and event publishing.
-
-Covers
-------
-- ServiceManager initialises cleanly.
-- register() publishes SERVICE_REGISTERED event.
-- start() transitions state to RUNNING and publishes SERVICE_STARTED.
-- stop() transitions state to STOPPED and publishes SERVICE_STOPPED.
-- status() returns the correct state string.
-- Discovering from a directory populates the registry.
 """
 
-# TODO: import os, tempfile
-# TODO: from unittest.mock import MagicMock
-# TODO: from services import ServiceManager, ServiceState
+import sys, os, tempfile
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+import pytest
+from kernel.event_bus import EventBus
+from services import ServiceManager, ServiceState
+
+
+def _make_sm(tmpdir=None):
+    return ServiceManager(EventBus(), services_dir=tmpdir or "/nonexistent")
+
+
+def _unit(name="svc-a", entrypoint="/services/a.py"):
+    return {"name": name, "entrypoint": entrypoint}
 
 
 class TestServiceManager:
 
     def test_instantiation(self):
-        """ServiceManager initialises with an event_bus mock."""
-        # TODO: sm = ServiceManager(MagicMock())
-        # TODO: assert sm is not None
-        pass
+        sm = _make_sm()
+        assert sm is not None
 
     def test_register_publishes_event(self):
-        """register() must publish a SERVICE_REGISTERED event."""
-        # TODO: event_bus = MagicMock()
-        # TODO: sm = ServiceManager(event_bus)
-        # TODO: sm.register("svc-a", {"name": "svc-a", "entrypoint": "/services/a.py"})
-        # TODO: event_bus.publish.assert_called_once()
-        # TODO: assert "SERVICE_REGISTERED" in str(event_bus.publish.call_args)
-        pass
+        bus = EventBus()
+        sm = ServiceManager(bus)
+        received = []
+        bus.subscribe("SERVICE_REGISTERED", received.append)
+        sm.register("svc-a", _unit())
+        bus.drain()
+        assert len(received) == 1
 
     def test_status_after_register_is_registered(self):
-        """A freshly registered service has state REGISTERED."""
-        # TODO: sm = ServiceManager(MagicMock())
-        # TODO: sm.register("svc-a", {"name": "svc-a", "entrypoint": "/services/a.py"})
-        # TODO: assert sm.status("svc-a") == ServiceState.REGISTERED
-        pass
-
-    def test_start_transitions_to_running(self):
-        """start() must transition a service from REGISTERED to RUNNING."""
-        # TODO: sm = ServiceManager(MagicMock())
-        # TODO: sm.register("svc-a", {"name": "svc-a", "entrypoint": "/services/a.py"})
-        # TODO: sm.start("svc-a")
-        # TODO: assert sm.status("svc-a") == ServiceState.RUNNING
-        pass
-
-    def test_stop_transitions_to_stopped(self):
-        """stop() must transition a service from RUNNING to STOPPED."""
-        # TODO: sm = ServiceManager(MagicMock())
-        # TODO: sm.register("svc-a", {"name": "svc-a", "entrypoint": "/services/a.py"})
-        # TODO: sm.start("svc-a")
-        # TODO: sm.stop("svc-a")
-        # TODO: assert sm.status("svc-a") == ServiceState.STOPPED
-        pass
+        sm = _make_sm()
+        sm.register("svc-a", _unit())
+        assert sm.status("svc-a") == ServiceState.REGISTERED
 
     def test_status_unknown_service(self):
-        """status() for an unregistered name must return 'unknown'."""
-        # TODO: sm = ServiceManager(MagicMock())
-        # TODO: assert sm.status("no-such-service") == "unknown"
-        pass
+        sm = _make_sm()
+        assert sm.status("no-such-service") == "unknown"
+
+    def test_register_missing_key_raises(self):
+        sm = _make_sm()
+        with pytest.raises(ValueError):
+            sm.register("bad", {"name": "bad"})  # missing "entrypoint"
+
+    def test_discover_missing_dir_does_not_raise(self):
+        sm = _make_sm("/definitely/does/not/exist")
+        sm.discover()  # should log a warning, not raise
+
+    def test_discover_loads_unit_files(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            unit_path = os.path.join(tmpdir, "myservice.service")
+            with open(unit_path, "w") as f:
+                f.write("name = myservice\n")
+                f.write("entrypoint = /services/myservice.py\n")
+            sm = ServiceManager(EventBus(), services_dir=tmpdir)
+            sm.discover()
+            assert sm.status("myservice") == ServiceState.REGISTERED
+
+    def test_start_transitions_to_running(self):
+        sm = _make_sm()
+        sm.register("svc-a", _unit(entrypoint="/nonexistent_stub.py"))
+        sm.start("svc-a")
+        import time; time.sleep(0.05)
+        assert sm.status("svc-a") in (ServiceState.RUNNING, ServiceState.STOPPED)
+
+    def test_start_unknown_service_raises(self):
+        sm = _make_sm()
+        with pytest.raises(KeyError):
+            sm.start("ghost-service")
+

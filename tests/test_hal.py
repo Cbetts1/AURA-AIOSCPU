@@ -1,55 +1,63 @@
 """
-Tests — HAL (Hardware Abstraction Layer)
-=========================================
-Validates virtual device registration and the hardware projection contract.
-
-Covers
-------
-- HAL initialises without error.
-- Virtual devices can be registered and retrieved by name.
-- project() raises when not in Hardware Mode.
-- teardown_all() releases all registered devices.
+Tests — HAL
+===========
 """
 
-# TODO: from unittest.mock import MagicMock
-# TODO: from hal import HAL
+import sys, os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+import pytest
+from unittest.mock import MagicMock
+from hal import HAL
 
 
 class TestHAL:
 
     def test_instantiation(self):
-        """HAL initialises cleanly with no devices registered."""
-        # TODO: hal = HAL()
-        # TODO: assert hal is not None
-        pass
+        hal = HAL()
+        assert hal is not None
 
     def test_register_and_get_device(self):
-        """A registered device can be retrieved by name."""
-        # TODO: hal = HAL()
-        # TODO: device = MagicMock()
-        # TODO: hal.register_device("net0", device)
-        # TODO: assert hal.get_device("net0") is device
-        pass
+        hal = HAL()
+        device = MagicMock()
+        hal.register_device("net0", device)
+        assert hal.get_device("net0") is device
 
     def test_get_unknown_device_returns_none(self):
-        """Looking up an unregistered device name returns None."""
-        # TODO: hal = HAL()
-        # TODO: assert hal.get_device("does-not-exist") is None
-        pass
+        hal = HAL()
+        assert hal.get_device("does-not-exist") is None
 
     def test_project_without_hardware_mode_raises(self):
-        """project() must raise when the kernel is not in Hardware Mode."""
-        # TODO: hal = HAL()
-        # TODO: with pytest.raises(PermissionError):
-        #     hal.project({"type": "network"})
-        pass
+        hal = HAL()
+        with pytest.raises(PermissionError):
+            hal.project({"type": "network", "name": "net1"})
+
+    def test_project_with_projection_enabled(self):
+        hal = HAL()
+        hal.enable_projection()
+        hal.project({"type": "network", "name": "vnet0"})
+        assert hal.get_device("vnet0") is not None
 
     def test_teardown_all_clears_devices(self):
-        """teardown_all() must remove all registered devices."""
-        # TODO: hal = HAL()
-        # TODO: hal.register_device("net0", MagicMock())
-        # TODO: hal.register_device("disp0", MagicMock())
-        # TODO: hal.teardown_all()
-        # TODO: assert hal.get_device("net0") is None
-        # TODO: assert hal.get_device("disp0") is None
-        pass
+        hal = HAL()
+        hal.register_device("net0", MagicMock())
+        hal.register_device("disp0", MagicMock())
+        hal.teardown_all()
+        assert hal.get_device("net0") is None
+        assert hal.get_device("disp0") is None
+
+    def test_start_and_stop(self):
+        hal = HAL()
+        hal.start()
+        assert hal.get_vcpu().running is True
+        hal.stop()
+        assert hal.get_vcpu().running is False
+
+    def test_vmemory_allocate_and_free(self):
+        hal = HAL()
+        mem = hal.get_vmemory()
+        region = mem.allocate("test_region", 1024)
+        assert len(region) == 1024
+        mem.free("test_region")
+        assert "test_region" not in mem._regions
+
