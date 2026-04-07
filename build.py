@@ -51,6 +51,7 @@ TOOLS = {
     "aura-logs":           "tools.aura_logs",
     "aura-service-status": "tools.aura_service_status",
     "aura-check":          "tools.check_requirements",
+    "aura-validate":       "tools.validate_system",
 }
 
 

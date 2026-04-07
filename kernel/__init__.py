@@ -103,6 +103,9 @@ class Kernel:
             build_service=self.build_service,
             model_manager=self.model_manager,
             device_profile=device_profile,
+            web_terminal=self.web_terminal,
+            network_service=self.network_service,
+            package_manager=self.package_manager,
         )
 
         # 9 — Watchdog (self-repair daemon)
@@ -115,7 +118,22 @@ class Kernel:
             auto_restart=watchdog_cfg.get("auto_restart", True),
         )
 
-        # 10 — Kernel loop
+        # 10 — Network monitor (connectivity events; starts lazily)
+        from services.network_service import NetworkService
+        self.network_service = NetworkService(self.event_bus)
+
+        # 11 — Package manager
+        from services.package_manager import PackageManager
+        self.package_manager = PackageManager(self.event_bus)
+
+        # 12 — Web terminal (off by default; user starts with 'web start')
+        from services.web_terminal import WebTerminalService
+        self.web_terminal = WebTerminalService(
+            dispatch_fn=None,   # wired after shell is created (see start())
+            event_bus=self.event_bus,
+        )
+
+        # 13 — Kernel loop
         self.loop = KernelLoop(
             self.scheduler, self.event_bus, self.aura,
             tick_interval_ms=tick_ms,
@@ -140,8 +158,14 @@ class Kernel:
         # Start the self-repair watchdog
         self.watchdog.start()
 
+        # Start the network monitor
+        self.network_service.start()
+
         # Discover and auto-start services
         self.services.discover()
+
+        # Wire the shell's dispatch function into the web terminal
+        self.web_terminal._dispatch_fn = self.shell.dispatch
 
         # Run the shell in a daemon thread so it doesn't block the loop
         self._shell_thread = threading.Thread(
@@ -156,6 +180,9 @@ class Kernel:
         """Gracefully stop all subsystems in reverse-start order."""
         logger.info("Kernel: shutting down")
         self.watchdog.stop()
+        self.network_service.stop()
+        if self.web_terminal.is_running:
+            self.web_terminal.stop()
         self.loop.stop()
         self.shell.stop()
         if self._shell_thread and self._shell_thread.is_alive():
