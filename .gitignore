@@ -1,0 +1,44 @@
+# Byte-compiled / optimised / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Test artefacts
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS generated
+.DS_Store
+Thumbs.db
+
+# Rootfs runtime directories (content is generated at build time)
+rootfs/tmp/*
+rootfs/var/run/*
+
+# Model files (large binaries — managed separately)
+models/*.bin
+models/*.gguf
+models/*.onnx
+
+# Logs
+logs/*.log
+rootfs/var/log/*.log
