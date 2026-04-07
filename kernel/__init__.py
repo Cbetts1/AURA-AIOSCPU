@@ -94,19 +94,9 @@ class Kernel:
         self.services = ServiceManager(self.event_bus,
                                        services_dir=services_dir)
 
-        # 8 — Shell (needs AURA, event_bus, and optional extras)
+        # 8 — BuildService (needed by shell)
         from services.build_service import BuildService
         self.build_service = BuildService(self.event_bus)
-
-        self.shell = Shell(
-            self.aura, self.event_bus,
-            build_service=self.build_service,
-            model_manager=self.model_manager,
-            device_profile=device_profile,
-            web_terminal=self.web_terminal,
-            network_service=self.network_service,
-            package_manager=self.package_manager,
-        )
 
         # 9 — Watchdog (self-repair daemon)
         watchdog_cfg = config.get_section("watchdog") if config else {}
@@ -133,7 +123,18 @@ class Kernel:
             event_bus=self.event_bus,
         )
 
-        # 13 — Kernel loop
+        # 13 — Shell (created last so all service references are ready)
+        self.shell = Shell(
+            self.aura, self.event_bus,
+            build_service=self.build_service,
+            model_manager=self.model_manager,
+            device_profile=device_profile,
+            web_terminal=self.web_terminal,
+            network_service=self.network_service,
+            package_manager=self.package_manager,
+        )
+
+        # 14 — Kernel loop
         self.loop = KernelLoop(
             self.scheduler, self.event_bus, self.aura,
             tick_interval_ms=tick_ms,
