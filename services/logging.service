@@ -1,0 +1,5 @@
+name        = logging
+entrypoint  = services/logging_service.py
+autostart   = true
+restart     = always
+description = Structured log aggregation and event recording

@@ -1,0 +1,5 @@
+name        = health-monitor
+entrypoint  = services/health_monitor.py
+autostart   = true
+restart     = always
+description = Service health monitor with self-healing circuit breaker

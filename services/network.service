@@ -1,0 +1,5 @@
+name        = network
+entrypoint  = services/network_service.py
+autostart   = true
+restart     = on-failure
+description = Network connectivity monitor — publishes NETWORK_STATUS events

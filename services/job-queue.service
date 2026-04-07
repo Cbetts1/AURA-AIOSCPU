@@ -1,0 +1,5 @@
+name        = job-queue
+entrypoint  = services/job_queue.py
+autostart   = true
+restart     = on-failure
+description = Prioritised background job queue with retry logic
