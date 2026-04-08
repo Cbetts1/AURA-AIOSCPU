@@ -19,12 +19,17 @@ cycle up to ``max_tick_interval_ms`` to reduce power consumption on
 mobile devices.  Any activity resets the interval to the base value.
 """
 
+from __future__ import annotations
+
 import logging
 import time
+from typing import TYPE_CHECKING
 
 from kernel.event_bus import EventBus, Event, Priority
 from kernel.scheduler import Scheduler
-from aura import AURA
+
+if TYPE_CHECKING:
+    from aura import AURA
 
 logger = logging.getLogger(__name__)
 
