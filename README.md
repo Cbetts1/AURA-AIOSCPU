@@ -4,7 +4,7 @@
 
 **AI-Driven Universal OS — Runs on Anything. Repairs Itself. Thinks for You.**
 
-[![Tests](https://img.shields.io/badge/tests-516%20passing-brightgreen)](tests/)
+[![Tests](https://img.shields.io/badge/tests-572%20passing-brightgreen)](tests/)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://python.org)
 [![Platform](https://img.shields.io/badge/platform-Android%20%7C%20Linux%20%7C%20macOS%20%7C%20Windows-lightgrey)](#)
 [![Architecture](https://img.shields.io/badge/arch-ARM64%20%7C%20x86__64%20%7C%20ARM-orange)](#)
@@ -207,7 +207,7 @@ python tools/aura_service_status.py   # inspect service unit files
 ## 🧪 Testing
 
 ```bash
-python -m pytest tests/ -v    # 516+ tests across 26 modules
+python -m pytest tests/ -v    # 572+ tests across 30 modules
 ```
 
 Test coverage:
@@ -273,7 +273,7 @@ AURA-AIOSCPU/
 ├── tools/          # Developer CLI tools
 ├── config/         # default.json + user.json (gitignored)
 ├── rootfs/         # Minimal root filesystem layout
-├── tests/          # 516+ tests across 26 modules
+├── tests/          # 572+ tests across 30 modules
 ├── build.py        # Build script → dist/
 ├── pyproject.toml  # Package metadata + `aura` CLI entry point
 ├── Dockerfile      # Minimal Docker image

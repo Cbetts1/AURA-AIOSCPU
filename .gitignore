@@ -28,6 +28,9 @@ htmlcov/
 
 # OS generated
 .DS_Store
+
+# AURA rollback safety backups
+rootfs.pre_rollback/
 Thumbs.db
 
 # Rootfs runtime directories (content is generated at build time)

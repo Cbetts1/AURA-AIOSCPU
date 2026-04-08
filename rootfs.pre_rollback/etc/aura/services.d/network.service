@@ -1,0 +1,12 @@
+[Service]
+Name=network
+Description=Network connectivity monitor
+Module=services.network_service:NetworkService
+AutoStart=true
+RestartPolicy=on-failure
+RestartDelay=5
+DependsOn=
+
+[Health]
+CheckInterval=30
+MaxFailures=3

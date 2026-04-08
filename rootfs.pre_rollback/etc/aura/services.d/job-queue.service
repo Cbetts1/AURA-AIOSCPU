@@ -1,0 +1,12 @@
+[Service]
+Name=job-queue
+Description=Prioritised job queue with retry
+Module=services.job_queue:JobQueue
+AutoStart=true
+RestartPolicy=on-failure
+RestartDelay=5
+DependsOn=logging
+
+[Health]
+CheckInterval=30
+MaxFailures=3
