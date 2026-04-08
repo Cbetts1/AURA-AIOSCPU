@@ -680,7 +680,7 @@ tools/copilot_bridge.py
 ## 14. Running the Test Suite
 
 ```bash
-# Full suite (all 572+ tests across 30 modules):
+# Full suite (all 878+ tests across 30+ modules):
 python -m pytest tests/ -v
 
 # Quiet summary only:
@@ -942,7 +942,7 @@ AURA-AIOSCPU/
 │   ├── tmp/                Temporary files
 │   └── home/               User home directory
 │
-├── tests/                  Test suite (572+ tests, 30+ modules)
+├── tests/                  Test suite (878+ tests, 30+ modules)
 │
 ├── logs/                   Rotating log files (auto-created)
 │
