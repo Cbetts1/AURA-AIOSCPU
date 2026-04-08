@@ -8,9 +8,19 @@ Design principles
 - Zero required dependencies: always falls back to a context-aware stub.
 - Optional llama-cpp-python for GGUF models (runs on ARM64 / Android).
 - Optional onnxruntime for ONNX models.
+- Ollama API bridge: zero-compile AI via http://localhost:11434 (phone-friendly).
+- OpenAI-compatible API bridge: any API key, any hosted endpoint (GPT-4, Groq, …).
 - One active model at a time — minimises RAM use on mobile.
 - Lazy loading: models are not loaded until first inference.
 - Registry persisted to JSON so models survive process restarts.
+
+Backend priority order (highest → lowest)
+------------------------------------------
+  1. Ollama  (if running locally or configured)
+  2. OpenAI-compatible API  (if api_key / api_base configured)
+  3. llama-cpp-python  (GGUF local inference)
+  4. onnxruntime  (ONNX local inference)
+  5. Stub  (always available — no real AI, but shell stays functional)
 """
 
 import hashlib
@@ -19,6 +29,8 @@ import logging
 import os
 import threading
 import time
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -101,6 +113,144 @@ class _OnnxEngine:
 
     def infer(self, prompt: str, _context: dict) -> str:
         return f"[ONNX model] Processed: {prompt}"
+
+
+class OllamaInferenceEngine:
+    """
+    Zero-compile AI inference via the Ollama REST API.
+
+    Requires Ollama running locally (http://localhost:11434) or at a custom
+    ``base_url``.  No native compilation — works on any Python platform
+    including Android/Termux (``curl -fsSL https://ollama.ai/install.sh | sh``
+    or ``pkg install ollama`` in Termux).
+
+    Usage::
+
+        engine = OllamaInferenceEngine(model="phi3")
+        engine.infer("what services are running?", ctx)
+    """
+
+    _DEFAULT_BASE = "http://localhost:11434"
+
+    def __init__(self, model: str = "phi3",
+                 base_url: str | None = None,
+                 timeout_s: int = 60):
+        self._model    = model
+        self._base_url = (base_url or self._DEFAULT_BASE).rstrip("/")
+        self._timeout  = timeout_s
+
+    @classmethod
+    def is_available(cls, base_url: str | None = None) -> bool:
+        """Return True if an Ollama server is reachable at *base_url*."""
+        url = (base_url or cls._DEFAULT_BASE).rstrip("/") + "/api/tags"
+        try:
+            req = urllib.request.Request(url, method="GET")
+            with urllib.request.urlopen(req, timeout=3):
+                return True
+        except Exception:
+            return False
+
+    def infer(self, prompt: str, context: dict) -> str:
+        """Send *prompt* to Ollama and return the response text."""
+        url = f"{self._base_url}/api/generate"
+        body = json.dumps({
+            "model":  self._model,
+            "prompt": prompt,
+            "stream": False,
+        }).encode()
+        try:
+            req = urllib.request.Request(
+                url, data=body,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=self._timeout) as resp:
+                data = json.loads(resp.read())
+            return str(data.get("response", "")).strip()
+        except urllib.error.URLError as exc:
+            raise RuntimeError(
+                f"Ollama unreachable at {self._base_url}: {exc}"
+            ) from exc
+        except Exception as exc:
+            raise RuntimeError(f"Ollama inference error: {exc}") from exc
+
+
+class OpenAIInferenceEngine:
+    """
+    OpenAI-compatible REST API inference engine.
+
+    Works with OpenAI, Groq, Together, Mistral, or any provider that
+    implements the ``POST /v1/chat/completions`` endpoint.
+
+    Configuration (via config/user.json)::
+
+        {
+          "aura": {
+            "backend":   "openai",
+            "api_key":   "sk-...",
+            "api_base":  "https://api.openai.com/v1",
+            "model":     "gpt-4o-mini"
+          }
+        }
+
+    ``api_key`` can also be supplied via the ``OPENAI_API_KEY`` environment
+    variable.  ``api_base`` defaults to the official OpenAI endpoint.
+    """
+
+    _DEFAULT_BASE  = "https://api.openai.com/v1"
+    _DEFAULT_MODEL = "gpt-4o-mini"
+
+    def __init__(self, api_key: str | None = None,
+                 api_base: str | None = None,
+                 model: str | None = None,
+                 timeout_s: int = 60,
+                 max_tokens: int = 512):
+        self._api_key   = (api_key
+                           or os.environ.get("OPENAI_API_KEY", ""))
+        self._api_base  = (api_base or self._DEFAULT_BASE).rstrip("/")
+        self._model     = model or self._DEFAULT_MODEL
+        self._timeout   = timeout_s
+        self._max_tokens = max_tokens
+
+    def infer(self, prompt: str, context: dict) -> str:
+        """Send *prompt* to the OpenAI-compatible endpoint."""
+        if not self._api_key:
+            raise RuntimeError(
+                "OpenAI API key not set. "
+                "Set OPENAI_API_KEY or config aura.api_key."
+            )
+        url  = f"{self._api_base}/chat/completions"
+        body = json.dumps({
+            "model":      self._model,
+            "messages":   [{"role": "user", "content": prompt}],
+            "max_tokens": self._max_tokens,
+        }).encode()
+        req = urllib.request.Request(
+            url, data=body,
+            headers={
+                "Content-Type":  "application/json",
+                "Authorization": f"Bearer {self._api_key}",
+            },
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=self._timeout) as resp:
+                data = json.loads(resp.read())
+            choices = data.get("choices", [])
+            if not choices:
+                return ""
+            return str(
+                choices[0].get("message", {}).get("content", "")
+            ).strip()
+        except urllib.error.HTTPError as exc:
+            body_text = exc.read().decode(errors="replace")
+            raise RuntimeError(
+                f"OpenAI API error {exc.code}: {body_text}"
+            ) from exc
+        except urllib.error.URLError as exc:
+            raise RuntimeError(
+                f"OpenAI endpoint unreachable: {exc}"
+            ) from exc
 
 
 # ---------------------------------------------------------------------------
@@ -254,6 +404,49 @@ class ModelManager:
         if found:
             logger.info("ModelManager: auto-registered: %s", found)
         return found
+
+    def load_ollama(self, model: str = "phi3",
+                    base_url: str | None = None) -> bool:
+        """
+        Activate the Ollama API backend.
+
+        Checks that the Ollama server is reachable before activating.
+        Returns True on success, False if the server is unreachable.
+        """
+        if not OllamaInferenceEngine.is_available(base_url):
+            logger.warning(
+                "ModelManager: Ollama not reachable at %s",
+                base_url or OllamaInferenceEngine._DEFAULT_BASE,
+            )
+            return False
+        engine = OllamaInferenceEngine(model=model, base_url=base_url)
+        with self._lock:
+            self._engine = engine
+            self._active = f"ollama:{model}"
+        logger.info("ModelManager: Ollama backend activated (model=%s)", model)
+        return True
+
+    def load_openai(self, model: str | None = None,
+                    api_key: str | None = None,
+                    api_base: str | None = None) -> bool:
+        """
+        Activate the OpenAI-compatible API backend.
+
+        ``api_key`` defaults to the ``OPENAI_API_KEY`` environment variable.
+        ``api_base`` defaults to ``https://api.openai.com/v1``.
+        Returns True on success.
+        """
+        engine = OpenAIInferenceEngine(
+            api_key=api_key, api_base=api_base, model=model
+        )
+        with self._lock:
+            self._engine = engine
+            self._active = f"openai:{engine._model}"
+        logger.info(
+            "ModelManager: OpenAI backend activated (model=%s base=%s)",
+            engine._model, engine._api_base,
+        )
+        return True
 
     # ------------------------------------------------------------------
     # Private — engine loading

@@ -130,10 +130,12 @@ class BuildService:
                 source="build_service",
             ))
 
+        has_baseline = bool(last_manifest)
         return {
-            "total_files":  len(checksums),
+            "total_files":   len(checksums),
             "changed_files": changed,
-            "integrity_ok":  len(changed) == 0,
+            "has_baseline":  has_baseline,
+            "integrity_ok":  has_baseline and len(changed) == 0,
         }
 
     def run_tests(self, async_run: bool = False) -> BuildResult | None:
@@ -150,6 +152,116 @@ class BuildService:
 
     def last_build_status(self) -> dict | None:
         return self._last_result.to_dict() if self._last_result else None
+
+    # ------------------------------------------------------------------
+    # Snapshot & rollback
+    # ------------------------------------------------------------------
+
+    def snapshot(self, label: str = "") -> dict:
+        """
+        Create a timestamped tarball of rootfs/ in dist/snapshots/.
+
+        Returns a dict with keys: ``success``, ``snapshot_id``, ``path``,
+        ``message``, and ``size_bytes``.
+        """
+        import tarfile
+        t0  = time.monotonic()
+        ts  = time.strftime("%Y%m%dT%H%M%S", time.gmtime())
+        sid = f"{ts}_{label}" if label else ts
+        snapshots_dir = os.path.join(self._root, "dist", "snapshots")
+        os.makedirs(snapshots_dir, exist_ok=True)
+        out_path = os.path.join(snapshots_dir, f"{sid}.tar.gz")
+        rootfs_path = os.path.join(self._root, "rootfs")
+        try:
+            with tarfile.open(out_path, "w:gz") as tar:
+                tar.add(rootfs_path, arcname="rootfs")
+            size = os.path.getsize(out_path)
+            duration = time.monotonic() - t0
+            self._log_line(
+                f"Snapshot created: {sid}  ({size/1024:.1f} KB  {duration:.2f}s)"
+            )
+            logger.info("BuildService: snapshot %r at %s", sid, out_path)
+            return {
+                "success":     True,
+                "snapshot_id": sid,
+                "path":        out_path,
+                "size_bytes":  size,
+                "message":     f"Snapshot {sid} created",
+            }
+        except Exception as exc:
+            msg = f"Snapshot failed: {exc}"
+            self._log_line(msg)
+            logger.exception("BuildService: %s", msg)
+            return {
+                "success":     False,
+                "snapshot_id": sid,
+                "path":        "",
+                "size_bytes":  0,
+                "message":     msg,
+            }
+
+    def list_snapshots(self) -> list[dict]:
+        """Return metadata for all available snapshots."""
+        snapshots_dir = os.path.join(self._root, "dist", "snapshots")
+        if not os.path.isdir(snapshots_dir):
+            return []
+        results = []
+        for entry in sorted(os.scandir(snapshots_dir), key=lambda e: e.name):
+            if entry.name.endswith(".tar.gz"):
+                sid = entry.name[:-7]   # strip .tar.gz
+                results.append({
+                    "snapshot_id": sid,
+                    "path":        entry.path,
+                    "size_bytes":  entry.stat().st_size,
+                })
+        return results
+
+    def rollback(self, snapshot_id: str) -> dict:
+        """
+        Restore rootfs/ from a previously created snapshot.
+
+        Returns a dict with ``success`` and ``message``.
+        """
+        import tarfile
+        snapshots_dir = os.path.join(self._root, "dist", "snapshots")
+        tar_path = os.path.join(snapshots_dir, f"{snapshot_id}.tar.gz")
+        if not os.path.exists(tar_path):
+            msg = f"Snapshot not found: {snapshot_id!r}"
+            return {"success": False, "message": msg}
+
+        rootfs_path = os.path.join(self._root, "rootfs")
+        t0 = time.monotonic()
+        try:
+            # Extract to a temp location first, then swap
+            import tempfile
+            with tempfile.TemporaryDirectory(dir=self._root) as tmp_dir:
+                with tarfile.open(tar_path, "r:gz") as tar:
+                    tar.extractall(tmp_dir)
+                extracted = os.path.join(tmp_dir, "rootfs")
+                if not os.path.isdir(extracted):
+                    return {
+                        "success": False,
+                        "message": "Snapshot archive missing rootfs/ directory",
+                    }
+                # Back up current rootfs as a safety net
+                backup = rootfs_path + ".pre_rollback"
+                if os.path.exists(backup):
+                    shutil.rmtree(backup)
+                shutil.copytree(rootfs_path, backup)
+                # Swap in the restored version
+                shutil.rmtree(rootfs_path)
+                shutil.copytree(extracted, rootfs_path)
+
+            duration = time.monotonic() - t0
+            msg = f"Rolled back to {snapshot_id} in {duration:.2f}s"
+            self._log_line(msg)
+            logger.info("BuildService: %s", msg)
+            return {"success": True, "message": msg}
+        except Exception as exc:
+            msg = f"Rollback failed: {exc}"
+            self._log_line(msg)
+            logger.exception("BuildService: %s", msg)
+            return {"success": False, "message": msg}
 
     # ------------------------------------------------------------------
     # Private — rebuild

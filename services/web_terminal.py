@@ -306,6 +306,7 @@ class _Handler(http.server.BaseHTTPRequestHandler):
     dispatch_fn  = None   # callable(cmd: str) -> str
     event_log    = None   # list of dicts
     start_time   = None   # float epoch
+    kernel_api   = None   # optional KernelAPI instance for REST endpoints
 
     def log_message(self, fmt, *args):  # silence default access log
         logger.debug("WebTerminal: " + fmt, *args)
@@ -333,6 +334,12 @@ class _Handler(http.server.BaseHTTPRequestHandler):
             log = list(self.__class__.event_log or [])
             self._respond(200, "application/json", json.dumps(log).encode())
 
+        elif path == "/api/services":
+            self._handle_get_services()
+
+        elif path == "/api/sysinfo":
+            self._handle_get_sysinfo()
+
         else:
             self._respond(404, "text/plain", b"Not found")
 
@@ -342,9 +349,18 @@ class _Handler(http.server.BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = urlparse(self.path).path
-        if path != "/api/cmd":
+        if path == "/api/cmd":
+            self._handle_post_cmd()
+        elif path == "/api/aura/query":
+            self._handle_post_aura_query()
+        else:
             self._respond(404, "text/plain", b"Not found")
-            return
+
+    # ------------------------------------------------------------------
+    # REST handlers
+    # ------------------------------------------------------------------
+
+    def _handle_post_cmd(self):
         try:
             length = int(self.headers.get("Content-Length", 0))
             raw    = self.rfile.read(length)
@@ -364,6 +380,65 @@ class _Handler(http.server.BaseHTTPRequestHandler):
 
         resp = json.dumps({"output": output, "ts": time.time()})
         self._respond(200, "application/json", resp.encode())
+
+    def _handle_get_services(self):
+        api = self.__class__.kernel_api
+        try:
+            if api is not None and hasattr(api, "list_services"):
+                services = api.list_services()
+            else:
+                services = {}
+            body = json.dumps({"services": services, "ts": time.time()})
+            self._respond(200, "application/json", body.encode())
+        except Exception as exc:
+            self._respond(500, "application/json",
+                          json.dumps({"error": str(exc)}).encode())
+
+    def _handle_get_sysinfo(self):
+        api = self.__class__.kernel_api
+        try:
+            if api is not None and hasattr(api, "sysinfo"):
+                info = api.sysinfo()
+            else:
+                info = {}
+            body = json.dumps({"sysinfo": info, "ts": time.time()})
+            self._respond(200, "application/json", body.encode())
+        except Exception as exc:
+            self._respond(500, "application/json",
+                          json.dumps({"error": str(exc)}).encode())
+
+    def _handle_post_aura_query(self):
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            raw    = self.rfile.read(length)
+            data   = json.loads(raw)
+            prompt = str(data.get("prompt", "")).strip()
+        except Exception:
+            self._respond(400, "application/json",
+                          json.dumps({"error": "bad request"}).encode())
+            return
+
+        if not prompt:
+            self._respond(400, "application/json",
+                          json.dumps({"error": "prompt required"}).encode())
+            return
+
+        api = self.__class__.kernel_api
+        try:
+            if api is not None and hasattr(api, "aura_query"):
+                response = api.aura_query(prompt)
+            elif self.__class__.dispatch_fn:
+                response = self.__class__.dispatch_fn(prompt) or ""
+            else:
+                response = "[AURA not attached]"
+            body = json.dumps({
+                "response": response,
+                "ts": time.time(),
+            })
+            self._respond(200, "application/json", body.encode())
+        except Exception as exc:
+            self._respond(500, "application/json",
+                          json.dumps({"error": str(exc)}).encode())
 
     # ------------------------------------------------------------------
     def _respond(self, code: int, content_type: str, body: bytes):
@@ -386,11 +461,21 @@ class WebTerminalService:
     Pass a shell ``dispatch_fn`` (e.g. ``shell.dispatch``) and optionally
     an event_bus so system events are forwarded to the web UI.
 
+    REST API endpoints
+    ------------------
+    GET  /              → HTML5 terminal page
+    POST /api/cmd       → {"cmd": "..."} → {"output": "...", "ts": epoch}
+    GET  /api/status    → {"running": true, "version": "...", "uptime_s": float}
+    GET  /api/events    → last N system events as JSON array
+    GET  /api/services  → {"services": {"name": "state", ...}}
+    GET  /api/sysinfo   → live system snapshot (JSON)
+    POST /api/aura/query → {"prompt": "..."} → {"response": "...", "ts": epoch}
+
     Example
     -------
     ::
 
-        svc = WebTerminalService(dispatch_fn=shell.dispatch)
+        svc = WebTerminalService(dispatch_fn=shell.dispatch, kernel_api=api)
         svc.start()                         # http://127.0.0.1:7331/
         ...
         svc.stop()
@@ -400,11 +485,13 @@ class WebTerminalService:
                  dispatch_fn=None,
                  event_bus=None,
                  host: str = "127.0.0.1",
-                 port: int = 7331):
+                 port: int = 7331,
+                 kernel_api=None):
         self._dispatch_fn  = dispatch_fn
         self._event_bus    = event_bus
         self._host         = host
         self._port         = port
+        self._kernel_api   = kernel_api
         self._server       = None
         self._thread       = None
         self._running      = False
@@ -427,9 +514,10 @@ class WebTerminalService:
         if self._running:
             return True
 
-        dispatch = self._dispatch_fn
-        event_log = self._event_log
+        dispatch   = self._dispatch_fn
+        event_log  = self._event_log
         start_time = time.time()
+        kernel_api = self._kernel_api
 
         class _H(_Handler):
             pass
@@ -437,6 +525,7 @@ class WebTerminalService:
         _H.dispatch_fn = dispatch
         _H.event_log   = event_log
         _H.start_time  = start_time
+        _H.kernel_api  = kernel_api
 
         try:
             self._server = http.server.HTTPServer((self._host, self._port), _H)
