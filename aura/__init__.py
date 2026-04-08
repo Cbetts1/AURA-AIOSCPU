@@ -27,6 +27,7 @@ Architecture
 """
 
 import logging
+import os
 
 from kernel.event_bus import EventBus, Event, Priority
 from aura.memory import ConversationMemory
@@ -35,6 +36,9 @@ from aura.introspection import SystemIntrospector
 from aura.context_builder import ContextBuilder
 
 logger = logging.getLogger(__name__)
+
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_MEMORY_PATH = os.path.join(_REPO_ROOT, "rootfs", "aura", "memory.json")
 
 # Events AURA subscribes to so its snapshot is always current
 _WATCHED_EVENTS = (
@@ -84,6 +88,14 @@ class AURA:
         host = detect_host_type()
         self._personality.set_context(mode=mode, host=host)
         logger.info("AURA: attached to kernel (mode=%s, host=%s)", mode, host)
+
+        # Load persisted memory from previous sessions
+        loaded = self._memory.load(_MEMORY_PATH)
+        if loaded:
+            logger.info("AURA: restored %d memory turns from disk", loaded)
+
+        # Save memory on graceful shutdown
+        self._event_bus.subscribe("SHUTDOWN", self._on_shutdown)
 
     # ------------------------------------------------------------------
     # Called by KernelLoop each tick
@@ -160,4 +172,14 @@ class AURA:
         key = f"last_{event.event_type.lower()}"
         self._snapshot[key] = event.payload
         logger.debug("AURA: recorded event %r", event.event_type)
+
+    def _on_shutdown(self, event: Event) -> None:
+        """Persist conversation memory on shutdown."""
+        saved = self._memory.save(_MEMORY_PATH)
+        if saved:
+            logger.info("AURA: memory persisted to %s", _MEMORY_PATH)
+
+    def save_memory(self, path: str | None = None) -> bool:
+        """Explicitly save conversation memory to *path* (defaults to standard location)."""
+        return self._memory.save(path or _MEMORY_PATH)
 

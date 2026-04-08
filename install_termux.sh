@@ -89,9 +89,11 @@ ok "$PY_VER"
 echo ""
 info "Installing Python dependencies …"
 $PYTHON -m pip install --upgrade pip --quiet 2>/dev/null || true
-$PYTHON -m pip install -r "$AURA_DIR/requirements.txt" --quiet \
-    && ok "Core dependencies installed" \
-    || fail "Some dependencies failed — AURA may still work"
+$PYTHON -m pip install -e "$AURA_DIR" --quiet \
+    && ok "AURA installed (aura command available)" \
+    || { $PYTHON -m pip install -r "$AURA_DIR/requirements.txt" --quiet \
+         && ok "Core dependencies installed" \
+         || fail "Some dependencies failed — AURA may still work"; }
 
 info "Installing optional psutil (enhanced metrics) …"
 $PYTHON -m pip install psutil --quiet 2>/dev/null \

@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: aura-aioscpu
+    env: docker
+    dockerfilePath: Dockerfile
+    envVars:
+      - key: AURA_MODE
+        value: universal
+    autoDeploy: true
+    plan: starter
+    disk:
+      name: aura-data
+      mountPath: /app/rootfs/aura
+      sizeGB: 1

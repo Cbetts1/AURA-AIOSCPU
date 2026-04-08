@@ -4,7 +4,7 @@
 
 **AI-Driven Universal OS — Runs on Anything. Repairs Itself. Thinks for You.**
 
-[![Tests](https://img.shields.io/badge/tests-189%20passing-brightgreen)](tests/)
+[![Tests](https://img.shields.io/badge/tests-572%20passing-brightgreen)](tests/)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://python.org)
 [![Platform](https://img.shields.io/badge/platform-Android%20%7C%20Linux%20%7C%20macOS%20%7C%20Windows-lightgrey)](#)
 [![Architecture](https://img.shields.io/badge/arch-ARM64%20%7C%20x86__64%20%7C%20ARM-orange)](#)
@@ -61,14 +61,24 @@ python tools/check_requirements.py
 ```bash
 git clone https://github.com/Cbetts1/AURA-AIOSCPU
 cd AURA-AIOSCPU
-pip install -r requirements.txt
+pip install -e .        # installs deps and the `aura` CLI command
 python launch/launcher.py
+```
+
+Once installed, `aura` is on your PATH:
+
+```bash
+aura status             # kernel + services state
+aura doctor             # deep system + environment validation
+aura build              # build rootfs from source
+aura test               # run test suite
+aura logs               # show system logs
 ```
 
 Or build first for a clean self-contained image:
 
 ```bash
-python build.py --test     # run 189 tests, then build
+python build.py --test     # run tests, then build
 python dist/aura           # launch the built image
 ```
 
@@ -77,21 +87,55 @@ python dist/aura           # launch the built image
 ## 🧠 Add AI Intelligence
 
 AURA ships in **stub mode** — it always works, even without a model file.
-To add a real AI brain, drop a GGUF model file into `models/`:
+
+### Option A — Ollama (recommended, zero compilation)
 
 ```bash
-# Download a small phone-friendly model (1-4 GB GGUF)
-# Example: Phi-2, TinyLlama, Mistral-7B-Q4
-cp ~/Downloads/phi-2.Q4_K_M.gguf models/
+# On desktop/server: https://ollama.ai/
+curl -fsSL https://ollama.ai/install.sh | sh
+ollama pull phi3        # or llama3, mistral, etc.
 
-# Then inside the AURA shell:
-aura> model scan          # auto-register new files
-aura> model load phi-2    # activate
-aura> What services are running?   # ask anything
+# On Android/Termux: pkg install ollama
 ```
 
-Supported model formats: **GGUF** (llama-cpp-python), **ONNX** (onnxruntime).
-Both are optional — AURA falls back to a context-aware stub if not installed.
+Then inside the AURA shell:
+```
+aura> model ollama phi3     # activate Ollama backend
+aura> What services are running?
+```
+
+### Option B — OpenAI-compatible API (GPT-4, Groq, Together, etc.)
+
+Add to `config/user.json`:
+```json
+{
+  "aura": {
+    "backend":  "openai",
+    "api_key":  "sk-...",
+    "api_base": "https://api.openai.com/v1",
+    "model":    "gpt-4o-mini"
+  }
+}
+```
+
+Or set `OPENAI_API_KEY` environment variable and run:
+```
+aura> model openai gpt-4o-mini
+```
+
+### Option C — Local GGUF file (llama-cpp-python)
+
+```bash
+cp ~/Downloads/phi-2.Q4_K_M.gguf models/
+
+# Then inside AURA:
+aura> model scan          # auto-register
+aura> model load phi-2    # activate
+aura> What services are running?
+```
+
+Supported formats: **GGUF** (llama-cpp-python), **ONNX** (onnxruntime), **Ollama**, **OpenAI-compatible API**.
+All are optional — AURA falls back to a context-aware stub if none are configured.
 
 ---
 
@@ -108,7 +152,7 @@ aura> model load X    activate a model
 aura> model scan      auto-discover new model files
 aura> build           rebuild AURA rootfs from source (self-build)
 aura> repair          verify file integrity, show what changed
-aura> test            run 189 unit tests from inside the live OS
+aura> test            run unit tests from inside the live OS
 aura> logs [N]        show last N log lines
 aura> exit            shutdown
 aura> <anything>      ask AURA directly
@@ -163,7 +207,7 @@ python tools/aura_service_status.py   # inspect service unit files
 ## 🧪 Testing
 
 ```bash
-python -m pytest tests/ -v    # 189 tests across 14 modules
+python -m pytest tests/ -v    # 572+ tests across 30 modules
 ```
 
 Test coverage:
@@ -225,20 +269,56 @@ AURA-AIOSCPU/
 ├── services/       # Service manager + BuildService (self-build/repair)
 ├── shell/          # Interactive shell with all built-in commands
 ├── host_bridge/    # Host OS adapter (Android/Termux, Linux, macOS, Windows)
-├── models/         # AI model manager (GGUF, ONNX, stub)
+├── models/         # AI model manager (GGUF, Ollama, OpenAI, stub)
 ├── tools/          # Developer CLI tools
 ├── config/         # default.json + user.json (gitignored)
 ├── rootfs/         # Minimal root filesystem layout
-├── tests/          # 189 tests across 14 modules
+├── tests/          # 572+ tests across 30 modules
 ├── build.py        # Build script → dist/
+├── pyproject.toml  # Package metadata + `aura` CLI entry point
+├── Dockerfile      # Minimal Docker image
+├── deploy/         # Railway + Render cloud deploy configs
 └── install_termux.sh  # One-command Android/Termux installer
 ```
 
 ---
 
+## 🐳 Docker
+
+```bash
+docker build -t aura-aioscpu .
+docker run -it -p 7331:7331 aura-aioscpu
+# Open http://localhost:7331 for the web terminal
+```
+
+For persistent memory across restarts:
+
+```bash
+docker run -it -p 7331:7331 -v aura_data:/app/rootfs/aura aura-aioscpu
+```
+
+---
+
+## ☁️ One-Line Cloud Deploy
+
+**Railway:**
+```bash
+# Fork the repo, then click "Deploy on Railway" or:
+railway login && railway up
+```
+
+**Render:**
+```bash
+# Import the repo in Render dashboard — render.yaml is auto-detected
+```
+
+Both platforms serve the AURA web terminal at a public HTTPS URL.
+
+---
+
 ## 🤝 Contributing
 
-1. Fork → branch → code → `python -m pytest tests/` (all 189 must pass)
+1. Fork → branch → code → `python -m pytest tests/` (all tests must pass)
 2. Run `python build.py --test` to build and verify
 3. Pull request
 

@@ -82,12 +82,17 @@ class KernelWatchdog:
     def __init__(self, event_bus: EventBus, service_manager,
                  check_interval_ms: int = 5000,
                  max_failures: int = 3,
-                 auto_restart: bool = True):
+                 auto_restart: bool = True,
+                 build_service=None,
+                 integrity_check_interval: int = 10):
         self._event_bus       = event_bus
         self._services        = service_manager
         self._interval_ms     = check_interval_ms
         self._max_failures    = max_failures
         self._auto_restart    = auto_restart
+        self._build_service   = build_service
+        self._integrity_every = max(1, integrity_check_interval)
+        self._check_count     = 0
         self._health:         dict[str, ServiceHealth] = {}
         self._running         = False
         self._thread:         threading.Thread | None = None
@@ -120,6 +125,11 @@ class KernelWatchdog:
     def get_health_report(self) -> dict:
         return {name: h.to_dict() for name, h in self._health.items()}
 
+    def attach_build_service(self, build_service) -> None:
+        """Wire a BuildService for periodic integrity checks."""
+        self._build_service = build_service
+        logger.info("KernelWatchdog: BuildService attached for integrity checks")
+
     # ------------------------------------------------------------------
     # Private
     # ------------------------------------------------------------------
@@ -130,6 +140,7 @@ class KernelWatchdog:
             self._check_cycle()
 
     def _check_cycle(self) -> None:
+        self._check_count += 1
         degraded = []
         for name, health in list(self._health.items()):
             state = self._services.status(name)
@@ -150,6 +161,11 @@ class KernelWatchdog:
         if self._auto_restart:
             for name in degraded:
                 self._attempt_restart(name)
+
+        # Periodic integrity check (every N cycles)
+        if (self._build_service is not None and
+                self._check_count % self._integrity_every == 0):
+            self._run_integrity_check()
 
     def _attempt_restart(self, name: str) -> None:
         health = self._health.get(name)
@@ -182,3 +198,19 @@ class KernelWatchdog:
         name = (event.payload or {}).get("name")
         if name:
             logger.debug("Watchdog: noticed service %r stopped", name)
+
+    def _run_integrity_check(self) -> None:
+        """Ask BuildService to verify source-file integrity."""
+        try:
+            report = self._build_service.verify_integrity()
+            if report.get("changed_files"):
+                logger.warning(
+                    "Watchdog: integrity drift detected (%d file(s) changed)",
+                    len(report["changed_files"]),
+                )
+                # INTEGRITY_ALERT is already published by BuildService;
+                # we additionally log so operators see it in the watchdog.
+            else:
+                logger.debug("Watchdog: integrity check OK")
+        except Exception:
+            logger.exception("Watchdog: integrity check error")

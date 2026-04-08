@@ -6,11 +6,23 @@ Rolling window of conversation turns with context injection.
 Turns are typed as: "user" | "aura" | "system"
 The memory window keeps the last ``max_turns`` turns. Older turns are
 discarded to keep the prompt context within the model's context window.
+
+Persistence
+-----------
+``save(path)`` and ``load(path)`` serialise/deserialise the rolling window
+to a JSON file so memory survives process restarts.  The on-disk format caps
+at 500 turns to prevent unbounded growth.
 """
 
+import json
+import logging
 import time
 from collections import deque
 from dataclasses import dataclass, field
+
+logger = logging.getLogger(__name__)
+
+_DISK_TURN_CAP = 500   # maximum turns written to disk
 
 
 @dataclass
@@ -112,3 +124,69 @@ class ConversationMemory:
 
     def to_list(self) -> list[dict]:
         return [t.to_dict() for t in self._turns]
+
+    # ------------------------------------------------------------------
+    # Persistence
+    # ------------------------------------------------------------------
+
+    def save(self, path: str) -> bool:
+        """
+        Persist the current rolling window to *path* (JSON).
+
+        Caps at ``_DISK_TURN_CAP`` most recent turns so the file never
+        grows unbounded.  Returns True on success.
+        """
+        try:
+            import os
+            os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+            turns = self.to_list()[-_DISK_TURN_CAP:]
+            with open(path, "w", encoding="utf-8") as fh:
+                json.dump(
+                    {
+                        "version":       1,
+                        "saved_at":      time.time(),
+                        "session_start": self._session_start,
+                        "turns":         turns,
+                    },
+                    fh,
+                    indent=2,
+                )
+            return True
+        except Exception:
+            logger.exception("ConversationMemory: save failed: %s", path)
+            return False
+
+    def load(self, path: str) -> int:
+        """
+        Restore turns from *path* (JSON written by ``save()``).
+
+        Existing in-memory turns are cleared first.
+        Returns the number of turns loaded (0 if file missing or corrupt).
+        """
+        try:
+            with open(path, encoding="utf-8") as fh:
+                data = json.load(fh)
+            raw_turns = data.get("turns", [])
+            self._turns.clear()
+            for entry in raw_turns[-self._max_turns:]:
+                self._turns.append(
+                    Turn(
+                        role=entry.get("role", "system"),
+                        content=entry.get("content", ""),
+                        timestamp=entry.get("timestamp", 0.0),
+                        metadata=entry.get("metadata", {}),
+                    )
+                )
+            # Restore original session start if present
+            if "session_start" in data:
+                self._session_start = data["session_start"]
+            logger.info(
+                "ConversationMemory: loaded %d turns from %s",
+                len(self._turns), path,
+            )
+            return len(self._turns)
+        except FileNotFoundError:
+            return 0
+        except Exception:
+            logger.exception("ConversationMemory: load failed: %s", path)
+            return 0
