@@ -15,9 +15,12 @@ Every subsystem is accessible as a kernel attribute.
 The only public interface for external code is kernel.api (KernelAPI).
 """
 
+from __future__ import annotations
+
 import logging
 import os
 import threading
+from typing import TYPE_CHECKING
 
 from hal import HAL
 from kernel.event_bus import EventBus, Event, Priority
@@ -28,9 +31,11 @@ from kernel.api import KernelAPI
 from kernel.override import CommandOverrideLayer
 from kernel.privilege import AURAPrivilege
 from kernel.mirror import MirrorModeEnforcer
-from aura import AURA
 from services import ServiceManager
-from shell import Shell
+
+if TYPE_CHECKING:
+    from aura import AURA
+    from shell import Shell
 
 logger = logging.getLogger(__name__)
 
@@ -99,6 +104,7 @@ class Kernel:
         self.model_manager.scan_models_dir()
 
         # 7 — AURA personality (pulsed every tick)
+        from aura import AURA
         self.aura = AURA(self.event_bus, model_manager=self.model_manager)
 
         # 8 — Kernel API (stable public surface)
@@ -182,6 +188,7 @@ class Kernel:
         )
 
         # 22 — Shell
+        from shell import Shell
         self.shell = Shell(
             self.aura, self.event_bus,
             kernel_api=self.api,
@@ -381,6 +388,7 @@ class Kernel:
         self.model_manager.scan_models_dir()
 
         # 7 — AURA (pulsed every tick; uses model manager for inference)
+        from aura import AURA
         self.aura = AURA(self.event_bus, model_manager=self.model_manager)
 
         # 8 — Kernel API (stable public surface for services/apps)
@@ -444,6 +452,7 @@ class Kernel:
         )
 
         # 19 — Shell (created last so all service references are ready)
+        from shell import Shell
         self.shell = Shell(
             self.aura, self.event_bus,
             kernel_api=self.api,
