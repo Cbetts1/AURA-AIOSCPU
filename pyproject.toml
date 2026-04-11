@@ -9,9 +9,7 @@ description = "AI-Driven Universal OS — Runs on Anything. Repairs Itself. Thin
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.10"
-dependencies = [
-    "pytest>=7.0",
-]
+dependencies = []
 
 [project.optional-dependencies]
 ai = [
@@ -21,10 +19,14 @@ ai = [
 metrics = [
     "psutil>=5.9",
 ]
+test = [
+    "pytest>=7.0",
+]
 all = [
     "llama-cpp-python>=0.2",
     "onnxruntime>=1.16",
     "psutil>=5.9",
+    "pytest>=7.0",
 ]
 
 [project.scripts]

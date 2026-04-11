@@ -1,10 +1,9 @@
-pytest>=7.0
-
-# Optional — enhanced system metrics (strongly recommended on desktop/phone)
-# psutil>=5.9
-
-# Optional — on-device AI inference (GGUF format, ARM64 optimised)
-# llama-cpp-python>=0.2
-
-# Optional — ONNX model inference
-# onnxruntime>=1.16
+# AURA-AIOSCPU — runtime requirements
+#
+# Core: no required runtime dependencies — Python 3.10+ stdlib only.
+#
+# Optional extras (install with pip install -e ".[extras]"):
+#   pip install -e ".[metrics]"   # psutil — enhanced CPU/mem metrics
+#   pip install -e ".[ai]"        # llama-cpp-python + onnxruntime — local inference
+#   pip install -e ".[test]"      # pytest — test suite
+#   pip install -e ".[all]"       # all of the above

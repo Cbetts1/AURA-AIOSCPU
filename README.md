@@ -2,165 +2,93 @@
 
 # AURA-AIOSCPU
 
-**AI-Driven Universal OS — Runs on Anything. Repairs Itself. Thinks for You.**
+**AI-native OS simulation layer. Pure Python. Runs on Android, Linux, macOS, Windows.**
 
-[![Tests](https://img.shields.io/badge/tests-572%20passing-brightgreen)](tests/)
+[![Tests](https://img.shields.io/badge/tests-918%20passing-brightgreen)](tests/)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://python.org)
 [![Platform](https://img.shields.io/badge/platform-Android%20%7C%20Linux%20%7C%20macOS%20%7C%20Windows-lightgrey)](#)
-[![Architecture](https://img.shields.io/badge/arch-ARM64%20%7C%20x86__64%20%7C%20ARM-orange)](#)
 [![License](https://img.shields.io/badge/license-MIT-green)](#)
-
-*The operating system that runs on your phone, laptop, SD card, or cloud server —
-with a built-in AI that watches your system, answers your questions, and fixes
-itself if something breaks.*
 
 </div>
 
 ---
 
-## ✨ What Makes AURA Different
+## What It Is
 
-| Feature | AURA-AIOSCPU | Traditional OS |
-|---------|-------------|----------------|
-| **Runs on Android/Termux** | ✅ One command | ❌ Reflash required |
-| **Self-repairs on crash** | ✅ Watchdog daemon | ❌ Manual restart |
-| **Rebuilds itself from source** | ✅ `rebuild` in shell | ❌ External build system |
-| **AI assistant built in** | ✅ Always live context | ❌ Add-on app |
-| **Zero native dependencies** | ✅ Pure Python stdlib | ❌ Requires toolchain |
-| **Mobile battery saving** | ✅ Adaptive tick rate | ❌ Fixed polling |
-| **SQLite virtual storage** | ✅ No filesystem mount | ❌ Partition required |
+AURA-AIOSCPU is a kernel simulation written entirely in Python (3.10+ stdlib, zero required dependencies). It models a real OS stack — kernel loop, event bus, scheduler, service registry, hardware abstraction, virtual storage — with a built-in AI personality layer that observes system state and answers queries.
+
+**Runs without root, without compilation, without a real OS partition.** Works on an Android phone via Termux or any Python 3.10+ environment.
 
 ---
 
-## 📱 Run on Your Android Phone (60 seconds)
+## Quick Start
 
-> **Requires:** Termux app from [F-Droid](https://f-droid.org/packages/com.termux/) + Python 3.10+
-
+**Android / Termux:**
 ```bash
-# 1. Install Termux from F-Droid (NOT Google Play)
-# 2. Open Termux and run:
-
 pkg install git python
 git clone https://github.com/Cbetts1/AURA-AIOSCPU
 cd AURA-AIOSCPU
 bash install_termux.sh
 ```
 
-That's it. `install_termux.sh` installs dependencies, builds the rootfs,
-runs a compatibility check, and launches AURA — all automatically.
-
-**Check your phone is compatible first:**
-```bash
-python tools/check_requirements.py
-```
-
----
-
-## 🖥️ Run on Desktop / Server
-
+**Desktop / Server:**
 ```bash
 git clone https://github.com/Cbetts1/AURA-AIOSCPU
 cd AURA-AIOSCPU
-pip install -e .        # installs deps and the `aura` CLI command
+pip install -e .
 python launch/launcher.py
 ```
 
-Once installed, `aura` is on your PATH:
-
+**Docker:**
 ```bash
-aura status             # kernel + services state
-aura doctor             # deep system + environment validation
-aura build              # build rootfs from source
-aura test               # run test suite
-aura logs               # show system logs
-```
-
-Or build first for a clean self-contained image:
-
-```bash
-python build.py --test     # run tests, then build
-python dist/aura           # launch the built image
+docker build -t aura-aioscpu .
+docker run -it -p 7331:7331 aura-aioscpu
+# Web terminal: http://localhost:7331
 ```
 
 ---
 
-## 🧠 Add AI Intelligence
+## CLI (`aura`)
 
-AURA ships in **stub mode** — it always works, even without a model file.
-
-### Option A — Ollama (recommended, zero compilation)
-
-```bash
-# On desktop/server: https://ollama.ai/
-curl -fsSL https://ollama.ai/install.sh | sh
-ollama pull phi3        # or llama3, mistral, etc.
-
-# On Android/Termux: pkg install ollama
-```
-
-Then inside the AURA shell:
-```
-aura> model ollama phi3     # activate Ollama backend
-aura> What services are running?
-```
-
-### Option B — OpenAI-compatible API (GPT-4, Groq, Together, etc.)
-
-Add to `config/user.json`:
-```json
-{
-  "aura": {
-    "backend":  "openai",
-    "api_key":  "sk-...",
-    "api_base": "https://api.openai.com/v1",
-    "model":    "gpt-4o-mini"
-  }
-}
-```
-
-Or set `OPENAI_API_KEY` environment variable and run:
-```
-aura> model openai gpt-4o-mini
-```
-
-### Option C — Local GGUF file (llama-cpp-python)
-
-```bash
-cp ~/Downloads/phi-2.Q4_K_M.gguf models/
-
-# Then inside AURA:
-aura> model scan          # auto-register
-aura> model load phi-2    # activate
-aura> What services are running?
-```
-
-Supported formats: **GGUF** (llama-cpp-python), **ONNX** (onnxruntime), **Ollama**, **OpenAI-compatible API**.
-All are optional — AURA falls back to a context-aware stub if none are configured.
-
----
-
-## 🔧 Shell Commands
+After `pip install -e .`, the `aura` command is on your PATH:
 
 ```
-aura> help            show this list
-aura> status          kernel state snapshot
-aura> services        registered services and states
-aura> sysinfo         full JSON system snapshot
-aura> device          hardware profile + phone compatibility info
-aura> model list      show registered AI models
-aura> model load X    activate a model
-aura> model scan      auto-discover new model files
-aura> build           rebuild AURA rootfs from source (self-build)
-aura> repair          verify file integrity, show what changed
-aura> test            run unit tests from inside the live OS
-aura> logs [N]        show last N log lines
-aura> exit            shutdown
-aura> <anything>      ask AURA directly
+aura status             kernel + services state
+aura doctor             system + environment validation
+aura build [--verify]   build rootfs from source
+aura repair             verify integrity, rebuild if drift detected
+aura verify             check rootfs against manifest
+aura test [-k filter]   run unit tests
+aura test --conformance run conformance suite
+aura logs [--tail N]    show system logs
+aura mirror             mirror/projection mode status
+aura host               host-bridge capabilities
+aura boot-log           last boot lifecycle
+aura provenance         build time, commit, environment
+aura override <action>  request a Command Override Layer (COL) override
+```
+
+Or from inside the running OS shell:
+
+```
+aura> status            kernel state snapshot
+aura> services          registered service states
+aura> sysinfo           full JSON system snapshot
+aura> device            hardware profile + compatibility
+aura> model list        registered AI models
+aura> model load X      activate a model
+aura> model scan        auto-discover model files
+aura> build             rebuild rootfs from inside the live OS
+aura> repair            verify file integrity
+aura> test              run unit tests in-process
+aura> logs [N]          show last N log lines
+aura> exit              shutdown
+aura> <anything>        ask AURA
 ```
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────┐
@@ -183,149 +111,153 @@ aura> <anything>      ask AURA directly
 └─────────────────────────────────────────────────────┘
 ```
 
-### Key Design Decisions
+### Design Notes
 
-- **Adaptive tick rate** — the kernel loop slows from 16 ms to 1 second when idle, saving battery on phones without sacrificing responsiveness when busy.
-- **SQLite virtual storage** — ships in Python stdlib, works on ARM64 without native compilation, single-file DB you can copy to an SD card.
-- **Self-repair watchdog** — a daemon thread monitors all services every 5 seconds and restarts any that crash, with exponential backoff and a failure cap.
-- **Self-build service** — the running OS can rebuild its own rootfs, run the test suite, and verify SHA-256 file integrity — all from a shell command.
-- **Zero required dependencies** — only Python 3.10+ stdlib. AI inference, enhanced metrics, and ONNX are optional.
-
----
-
-## 🔬 Developer Tools
-
-```bash
-python tools/aura_sys_info.py         # hardware profile + compatibility check
-python tools/check_requirements.py    # pre-flight checker for any device
-python tools/aura_logs.py             # view / follow live logs
-python tools/aura_service_status.py   # inspect service unit files
-```
+- **Adaptive tick** — idle kernel slows from 16 ms to 1 s, saving battery without sacrificing responsiveness.
+- **SQLite virtual storage** — stdlib, ARM64-safe, single-file DB; no partition mount needed.
+- **Watchdog daemon** — monitors all services every 5 s, auto-restarts on crash with exponential backoff, disables after 3 failures.
+- **Self-build** — `BuildService` rebuilds rootfs, runs tests, and verifies SHA-256 integrity from a single shell command.
+- **Zero required dependencies** — everything uses Python 3.10+ stdlib. AI inference, metrics, and ONNX are optional.
 
 ---
 
-## 🧪 Testing
+## AI Models
+
+AURA ships in **stub mode** — fully functional without any model file.
+
+### Ollama (recommended)
 
 ```bash
-python -m pytest tests/ -v    # 572+ tests across 30 modules
+# Desktop: https://ollama.ai/
+curl -fsSL https://ollama.ai/install.sh | sh
+ollama pull phi3
+
+# Android/Termux: pkg install ollama
 ```
 
-Test coverage:
-- Kernel loop, scheduler, event bus, HAL, modes
-- AURA personality, shell, host bridge, services
-- **Config** — loading, merging, env overrides, mobile profile, persistence
-- **Device profile** — architecture detection, tick recommendations
-- **VStorageDevice** — KV store, file store, SQLite integrity, stats
-- **KernelWatchdog** — failure tracking, auto-restart, backoff, event publishing
-- **BuildService** — rootfs build, integrity verification, event lifecycle
-- **ModelManager** — register, load/unload, scan, thread safety, stub fallback
+```
+aura> model ollama phi3
+aura> What services are running?
+```
+
+### OpenAI-compatible API
+
+`config/user.json`:
+```json
+{
+  "aura": {
+    "backend":  "openai",
+    "api_key":  "sk-...",
+    "api_base": "https://api.openai.com/v1",
+    "model":    "gpt-4o-mini"
+  }
+}
+```
+
+Or `OPENAI_API_KEY=sk-... python launch/launcher.py`.
+
+### Local GGUF (llama-cpp-python)
+
+```bash
+pip install -e ".[ai]"
+cp ~/Downloads/phi-2.Q4_K_M.gguf models/
+```
+
+```
+aura> model scan
+aura> model load phi-2
+```
+
+Supported: **GGUF** (llama-cpp-python), **ONNX** (onnxruntime), **Ollama**, **OpenAI-compatible API**, **stub**.
 
 ---
 
-## ⚙️ Configuration
+## Configuration
 
-Edit `config/default.json` or create `config/user.json` for overrides.
-Environment variables: `AURA_CFG_<SECTION>_<KEY>=value`
+`config/default.json` is the base config. Create `config/user.json` for overrides (gitignored).
+
+Environment variable overrides: `AURA_CFG_<SECTION>_<KEY>=value`
 
 ```bash
-# Force mobile mode on any device:
-AURA_CFG_KERNEL_TICK_INTERVAL_MS=100 python launch/launcher.py
-
-# Force a specific mode:
-AURA_MODE=universal python launch/launcher.py
+AURA_CFG_KERNEL_TICK_INTERVAL_MS=100 python launch/launcher.py   # force mobile tick rate
+AURA_MODE=universal python launch/launcher.py                     # force a specific mode
 ```
 
-**Mobile profile** is applied automatically when running on Android/Termux:
-- Tick rate: 100 ms (10 Hz) instead of 16 ms
-- Max memory: 256 MB instead of 512 MB
+Mobile profile is applied automatically on Android/Termux:
+- Tick: 100 ms (10 Hz) instead of 16 ms
+- Max RAM: 256 MB instead of 512 MB
 - Task queue: 256 instead of 1 000
 
 ---
 
-## 📋 Requirements
+## Testing
 
-| Requirement | Minimum | Recommended |
-|-------------|---------|-------------|
-| Python | 3.10 | 3.12+ |
-| RAM | 256 MB | 1 GB+ |
-| Storage | 100 MB | 500 MB+ |
-| Architecture | Any Python-supported | ARM64 / x86_64 |
-
-**Optional for AI inference:**
-- `pip install llama-cpp-python` — GGUF models on ARM64/x86_64
-- `pip install onnxruntime` — ONNX models
-- `pip install psutil` — enhanced metrics
+```bash
+pip install -e ".[test]"
+python -m pytest tests/ -q          # 918 tests across 51 modules
+python -m pytest tests/conformance/ # AI layer, boot, bridge, rootfs, shell, services
+```
 
 ---
 
-## 🗂️ Project Structure
+## Requirements
+
+| Requirement | Minimum |
+|-------------|---------|
+| Python | 3.10+ |
+| RAM | 256 MB |
+| Storage | 100 MB |
+
+**Optional:**
+- `pip install -e ".[metrics]"` — `psutil` for enhanced CPU/memory metrics
+- `pip install -e ".[ai]"` — `llama-cpp-python` (GGUF) + `onnxruntime` (ONNX) for local inference
+- `pip install -e ".[test]"` — `pytest` to run the test suite
+
+---
+
+## Project Structure
 
 ```
 AURA-AIOSCPU/
-├── launch/         # Boot sequence (launcher.py)
-├── kernel/         # Core: loop, scheduler, event bus, modes, watchdog, config
-├── aura/           # AI personality layer
-├── hal/            # Hardware abstraction: vCPU, vMemory, vBus, VStorageDevice
-├── services/       # Service manager + BuildService (self-build/repair)
-├── shell/          # Interactive shell with all built-in commands
-├── host_bridge/    # Host OS adapter (Android/Termux, Linux, macOS, Windows)
-├── models/         # AI model manager (GGUF, Ollama, OpenAI, stub)
-├── tools/          # Developer CLI tools
-├── config/         # default.json + user.json (gitignored)
-├── rootfs/         # Minimal root filesystem layout
-├── tests/          # 572+ tests across 30 modules
-├── build.py        # Build script → dist/
-├── pyproject.toml  # Package metadata + `aura` CLI entry point
-├── Dockerfile      # Minimal Docker image
-├── deploy/         # Railway + Render cloud deploy configs
-└── install_termux.sh  # One-command Android/Termux installer
+├── launch/         boot sequence (launcher.py)
+├── kernel/         loop, scheduler, event bus, modes, watchdog, config, permissions
+├── aura/           AI personality layer (memory, introspection, context, personality)
+├── hal/            hardware abstraction: vCPU, vMemory, vBus, VStorageDevice (SQLite)
+├── services/       service registry + health monitor, storage, network, job queue,
+│                   logging, build service, web terminal
+├── shell/          interactive shell + plugin loader
+├── host_bridge/    host OS adapter (Android/Termux, Linux, macOS, Windows)
+├── bridge/         bridge interface + per-platform implementations
+├── models/         AI model manager (Ollama, OpenAI, GGUF, ONNX, stub)
+├── tools/          aura_cli.py, check_requirements.py, validate_system.py, manifest.py
+├── config/         default.json; create user.json for local overrides (gitignored)
+├── rootfs/         minimal root filesystem layout (bin, etc, var, tmp, home, mnt, …)
+├── tests/          918 tests across 51 modules (unit + conformance)
+├── build.py        builds dist/ image
+├── pyproject.toml  package metadata + `aura` CLI entry point
+├── Dockerfile      Python 3.12-slim image, non-root, exposes :7331
+├── deploy/         Railway (railway.json) + Render (render.yaml) configs
+└── install_termux.sh  Android/Termux one-command installer
 ```
 
 ---
 
-## 🐳 Docker
-
-```bash
-docker build -t aura-aioscpu .
-docker run -it -p 7331:7331 aura-aioscpu
-# Open http://localhost:7331 for the web terminal
-```
-
-For persistent memory across restarts:
-
-```bash
-docker run -it -p 7331:7331 -v aura_data:/app/rootfs/aura aura-aioscpu
-```
-
----
-
-## ☁️ One-Line Cloud Deploy
+## Cloud Deploy
 
 **Railway:**
 ```bash
-# Fork the repo, then click "Deploy on Railway" or:
 railway login && railway up
 ```
 
-**Render:**
-```bash
-# Import the repo in Render dashboard — render.yaml is auto-detected
-```
+**Render:** Import the repo — `render.yaml` is auto-detected.
 
-Both platforms serve the AURA web terminal at a public HTTPS URL.
+Both serve the AURA web terminal at a public HTTPS URL.
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
-1. Fork → branch → code → `python -m pytest tests/` (all tests must pass)
-2. Run `python build.py --test` to build and verify
+1. Fork → branch → `pip install -e ".[test]"` → code
+2. `python -m pytest tests/` — all tests must pass
 3. Pull request
 
----
-
-<div align="center">
-
-**AURA-AIOSCPU** — *Built to run everywhere. Designed to think. Made to last.*
-
-</div>
