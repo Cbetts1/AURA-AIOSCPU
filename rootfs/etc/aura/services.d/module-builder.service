@@ -1,0 +1,11 @@
+[Service]
+Name=module-builder
+Description=Module scaffolding and self-expansion engine
+Module=services.module_builder:ModuleBuilder
+AutoStart=false
+RestartPolicy=never
+DependsOn=logging
+
+[Health]
+CheckInterval=60
+MaxFailures=1

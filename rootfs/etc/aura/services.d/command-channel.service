@@ -1,0 +1,12 @@
+[Service]
+Name=command-channel
+Description=Remote REST command channel for Command Center integration
+Module=services.command_channel:CommandChannelService
+AutoStart=false
+RestartPolicy=on-failure
+RestartDelay=10
+DependsOn=network,logging
+
+[Health]
+CheckInterval=30
+MaxFailures=3

@@ -4,7 +4,7 @@
 
 **AI-native OS simulation layer. Pure Python. Runs on Android, Linux, macOS, Windows.**
 
-[![Tests](https://img.shields.io/badge/tests-918%20passing-brightgreen)](tests/)
+[![Tests](https://img.shields.io/badge/tests-1015%20passing-brightgreen)](tests/)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://python.org)
 [![Platform](https://img.shields.io/badge/platform-Android%20%7C%20Linux%20%7C%20macOS%20%7C%20Windows-lightgrey)](#)
 [![License](https://img.shields.io/badge/license-MIT-green)](#)
@@ -121,6 +121,62 @@ aura> <anything>        ask AURA
 
 ---
 
+## Virtual Network & Remote Control
+
+Each AURA instance operates as a **virtual node** in a larger Command-Center-managed cluster.
+
+### Node Identity
+Every instance generates a stable UUID (`config/node_identity.json`) and declares capabilities:
+```bash
+cat config/node_identity.json
+# {"node_id": "550e8400-...", "alias": "myphone-aura", "created_at": ...}
+```
+
+### Command Channel (port 7332)
+A REST API that the Command Center uses to orchestrate this node:
+```bash
+# Query node status
+curl http://localhost:7332/api/node/status
+
+# Execute a remote command
+curl -X POST http://localhost:7332/api/cmd \
+  -H "Content-Type: application/json" -d '{"cmd": "status"}'
+
+# Start/stop a service remotely
+curl -X POST http://localhost:7332/api/service/start -d '{"name": "network"}'
+```
+
+### Command Center Registration
+```bash
+export CC_URL=http://192.168.1.10:8080
+export CC_API_KEY=your-secret
+python launch/launcher.py
+# Node registers, sends heartbeats, accepts remote commands automatically
+```
+
+### Virtual Mesh
+Peer nodes discover and sync with each other:
+```bash
+# List known peers
+curl http://localhost:7332/api/peers
+
+# Trigger mesh sync
+curl -X POST http://localhost:7332/api/mesh/sync
+```
+
+### Module Self-Expansion
+Build new services at runtime without stopping AURA:
+```python
+from services.module_builder import ModuleBuilder
+mb = ModuleBuilder()
+result = mb.scaffold_service("analytics", description="Usage analytics")
+# Creates services/analytics_service.py, tests/, and .service descriptor
+```
+
+See [USAGE.md](USAGE.md) for full documentation.
+
+---
+
 ## AI Models
 
 AURA ships in **stub mode** — fully functional without any model file.
@@ -223,8 +279,9 @@ AURA-AIOSCPU/
 ├── kernel/         loop, scheduler, event bus, modes, watchdog, config, permissions
 ├── aura/           AI personality layer (memory, introspection, context, personality)
 ├── hal/            hardware abstraction: vCPU, vMemory, vBus, VStorageDevice (SQLite)
+├── vnet/           virtual network layer (node identity, CC client, peer registry, mesh)
 ├── services/       service registry + health monitor, storage, network, job queue,
-│                   logging, build service, web terminal
+│                   logging, build service, web terminal, command channel, module builder
 ├── shell/          interactive shell + plugin loader
 ├── host_bridge/    host OS adapter (Android/Termux, Linux, macOS, Windows)
 ├── bridge/         bridge interface + per-platform implementations
@@ -232,7 +289,7 @@ AURA-AIOSCPU/
 ├── tools/          aura_cli.py, check_requirements.py, validate_system.py, manifest.py
 ├── config/         default.json; create user.json for local overrides (gitignored)
 ├── rootfs/         minimal root filesystem layout (bin, etc, var, tmp, home, mnt, …)
-├── tests/          918 tests across 51 modules (unit + conformance)
+├── tests/          1015 tests across 39 modules (unit + conformance)
 ├── build.py        builds dist/ image
 ├── pyproject.toml  package metadata + `aura` CLI entry point
 ├── Dockerfile      Python 3.12-slim image, non-root, exposes :7331
@@ -252,6 +309,19 @@ railway login && railway up
 **Render:** Import the repo — `render.yaml` is auto-detected.
 
 Both serve the AURA web terminal at a public HTTPS URL.
+
+---
+
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [README.md](README.md) | Overview and quick start |
+| [INSTALL.md](INSTALL.md) | Detailed installation guide |
+| [USAGE.md](USAGE.md) | Full usage reference |
+| [KERNEL_ARCHITECTURE.md](KERNEL_ARCHITECTURE.md) | Kernel internals |
+| [STORAGE_ARCHITECTURE.md](STORAGE_ARCHITECTURE.md) | Storage layer design |
+| [BUILD_AND_TOOLING.md](BUILD_AND_TOOLING.md) | Build system and tools |
 
 ---
 
